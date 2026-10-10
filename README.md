@@ -6,7 +6,7 @@ RepCount is a mobile-first gym-owner workspace for membership plans, member reco
 
 This version removes the Apper SDK runtime and uses Supabase Auth, PostgreSQL, Storage, a server-side user-management function and a Supabase-backed query adapter.
 
-**New Supabase project:** `mnflpbdtfvksbxjdsvdf` is the target for this integration branch. Its seven business tables exist, but the initial audit found **no application RLS policies**, **no deployed Edge Functions**, and **no recorded migrations**. Do not point a production website at this project until all migrations, the first administrator bootstrap, the functions, and Vercel environment variables have been verified. The previous backend's data and users are not automatically transferred.
+**Active Supabase project:** `mnflpbdtfvksbxjdsvdf` (gym). On 2026-10-10, the missing six schema/security migrations were successfully applied, along with the one-time first-Admin bootstrap and reconciliation of constraints/internal helper privileges. The seven business tables now have 19 application RLS policies, and the `admin-users` and `secure-login` functions are deployed. An existing confirmed Auth account was assigned the first Admin role in a `RepCount Gym` workspace. Older-project data was **not** transferred. Vercel's production `VITE_SUPABASE_URL` and publishable key were verified to match this project. Live sign-in using the account's password still requires browser-level verification.
 
 The old MemoryAdapter seed data and demo login seed are removed. Only `/login` is intended as a public sign-in page.
 
@@ -33,15 +33,15 @@ Open the Supabase Dashboard → **SQL Editor** → **New query**. Run these migr
 3. `supabase/migrations/202610100003_move_tenant_helpers_private.sql`
 4. `supabase/migrations/202610100004_fix_workspace_link_trigger.sql`
 
-The initial schema creates the business tables, per-gym RLS policies, relationship checks, payment-reconciliation triggers and dashboard-summary RPC. The follow-up migrations harden function grants, keep tenant helpers outside the API-exposed `public` schema, fix relationship validation, add the private login lock table, add foreign-key indexes, and optimize row-level security policies. These migrations have **not** been confirmed applied to the newly selected Supabase project. Before connecting the website, reconcile the existing partial schema against the migration SQL, execute the missing security policies and application functions, and verify each step. Do not rerun the entire initial migration blindly against existing tables.
+The initial schema creates the business tables, per-gym RLS policies, relationship checks, payment-reconciliation triggers and dashboard-summary RPC. The follow-up migrations harden function grants, keep tenant helpers outside the API-exposed `public` schema, fix relationship validation, add the private login lock table, add foreign-key indexes, and optimize row-level security policies. All six baseline migrations have been applied to the current `gym` project through Supabase's migration API. The idempotent reconciliation migration `20261010182500_reconcile_existing_table_security.sql` records additional hardening required because the tables predated the migration. On a **fresh** project, run the baseline migrations and reconciliation migration in order and verify them. Do not run the bootstrap again on the existing live workspace.
 
-### 2. Create the first Admin
+### 2. Create the first Admin (new installations only)
 
 In Supabase Dashboard → **Authentication → Users → Add user**, create the first Admin login. Use a strong password and enable **Auto Confirm User** for this Admin. This account is the trusted initial administrator; do not use the old demo credentials.
 
 Then open `supabase/bootstrap_admin.sql`, replace the two placeholder values (`REPLACE_WITH_FIRST_ADMIN_EMAIL` and `REPLACE_WITH_GYM_NAME`) with your Admin email and your gym/workspace name, and run that edited script in the SQL Editor **once only**. It creates the gym, user profile and Admin membership. Do not delete this account or run the bootstrap script twice.
 
-### 3. Deploy the Admin user-management function
+### 3. Deploy the Admin user-management function (already active on the selected project)
 
 Install the Supabase CLI and authenticate from a terminal:
 
@@ -107,3 +107,12 @@ The simplified home screen shows only three headline metrics: outstanding fees, 
 - Business tables reference users only through Supabase Auth IDs and the private `gym_users` role mapping.
 - Public signup and password-recovery pages are removed; user administration is server-side and role assignments are never accepted directly from the browser.
 - Three failed sign-in attempts trigger a server-side 24-hour lock for the normalized account/network fingerprint. A browser identifier is not used as a security boundary. Local storage is only a usability aid; the database lock is the enforcement boundary. This complements Supabase's native rate limits. It does not revoke already-active sessions and cannot make the application invulnerable to every attack.
+
+## Operational status and login troubleshooting (2026-10-10)
+
+- Production application: https://e-repcount-gym-payment-manager-three.vercel.app/login
+- Vercel production deployment is READY; Vercel Authentication is restricted to preview deployments. The website uses Supabase Auth for sign-in.
+- Supabase project: `mnflpbdtfvksbxjdsvdf`. Both required Edge Functions are ACTIVE. Database checks show one gym, one active Admin membership, one profile, and 19 public-schema RLS policies.
+- Onboarding: sign in using the existing confirmed Supabase Auth account and its original password. Do not share credentials or run the first-Admin bootstrap again. If the password is unknown, use Supabase Dashboard → Authentication → Users to initiate a secure reset for the authorized account.
+- Security follow-up: enable Auth leaked-password protection in the Supabase dashboard. Verify public sign-ups are disabled and limit Vercel environment credentials to those required for this frontend-only project.
+- Automated database role simulation confirmed the Admin sees its own workspace and the anonymous role sees no gym/profile/member rows. A real browser login, password reset, and cross-gym access test were not performed.
