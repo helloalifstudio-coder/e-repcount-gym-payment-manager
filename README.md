@@ -18,7 +18,7 @@ The old MemoryAdapter seed data and demo login seed are removed. Only `/login` i
 - **Roles:** Admin, Manager and Staff. Admin manages accounts and roles. Manager can manage membership operations. Staff can read gym records and record payments.
 - **Payment consistency:** a PostgreSQL trigger recalculates fee-cycle paid amount, balance and status within the same transaction as payment inserts/updates/deletes.
 - **User administration:** `supabase/functions/admin-users/index.ts` validates the caller's Supabase JWT and requires an active Admin role before creating confirmed accounts, assigning roles, listing accounts or deleting accounts. Privileged credentials remain server-side.
-- **Login abuse controls:** `supabase/functions/secure-login/index.ts` checks a private database lock bucket before verifying credentials. Three failed attempts lock that browser/network fingerprint for 24 hours. It stores only an HMAC fingerprint, never the email, password or raw IP address, and never logs credentials or returned tokens.
+- **Login abuse controls:** `supabase/functions/secure-login/index.ts` checks a private database lock bucket before verifying credentials. Three failed attempts lock the account/network HMAC fingerprint for 24 hours. Rotating a browser ID or User-Agent does not reset this bucket. It stores only an HMAC fingerprint, never the email, password or raw IP address, and never logs credentials or returned tokens.
 
 ## First-time Supabase setup
 
@@ -106,4 +106,4 @@ The simplified home screen shows only three headline metrics: outstanding fees, 
 - Account passwords are never stored in RepCount business tables.
 - Business tables reference users only through Supabase Auth IDs and the private `gym_users` role mapping.
 - Public signup and password-recovery pages are removed; user administration is server-side and role assignments are never accepted directly from the browser.
-- Three failed sign-in attempts trigger a server-side 24-hour lock for the browser/network fingerprint. Local storage is only a usability aid; the database lock is the enforcement boundary. This complements Supabase's native rate limits. It does not revoke already-active sessions and cannot make the application invulnerable to every attack.
+- Three failed sign-in attempts trigger a server-side 24-hour lock for the normalized account/network fingerprint. A browser identifier is not used as a security boundary. Local storage is only a usability aid; the database lock is the enforcement boundary. This complements Supabase's native rate limits. It does not revoke already-active sessions and cannot make the application invulnerable to every attack.
