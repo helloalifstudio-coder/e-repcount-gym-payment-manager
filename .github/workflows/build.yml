@@ -63,3 +63,6 @@ jobs:
         run: |
           deno check supabase/functions/admin-users/index.ts
           deno check supabase/functions/secure-login/index.ts
+          deno check supabase/tests/login_throttle.test.ts
+      - name: Test login rate-limit identity
+        run: deno test supabase/tests/login_throttle.test.ts
