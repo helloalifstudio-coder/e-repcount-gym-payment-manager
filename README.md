@@ -6,7 +6,7 @@ RepCount is a mobile-first gym-owner workspace for membership plans, member reco
 
 This version removes the Apper SDK runtime and uses Supabase Auth, PostgreSQL, Storage, a server-side user-management function and a Supabase-backed query adapter.
 
-The schema and security migrations are applied to the Supabase project, and the initial Admin has an active workspace membership. The application code in this branch is a proposed single-login/lockout hardening update; it must pass CI and be deployed through Vercel before the browser can use it.
+**New Supabase project:** `mnflpbdtfvksbxjdsvdf` is the target for this integration branch. Its seven business tables exist, but the initial audit found **no application RLS policies**, **no deployed Edge Functions**, and **no recorded migrations**. Do not point a production website at this project until all migrations, the first administrator bootstrap, the functions, and Vercel environment variables have been verified. The previous backend's data and users are not automatically transferred.
 
 The old MemoryAdapter seed data and demo login seed are removed. Only `/login` is intended as a public sign-in page.
 
@@ -33,7 +33,7 @@ Open the Supabase Dashboard → **SQL Editor** → **New query**. Run these migr
 3. `supabase/migrations/202610100003_move_tenant_helpers_private.sql`
 4. `supabase/migrations/202610100004_fix_workspace_link_trigger.sql`
 
-The initial schema creates the business tables, per-gym RLS policies, relationship checks, payment-reconciliation triggers and dashboard-summary RPC. The follow-up migrations harden function grants, keep tenant helpers outside the API-exposed `public` schema, fix relationship validation, add the private login lock table, add foreign-key indexes, and optimize row-level security policies. These migrations have already been applied to the live Supabase project. For a fresh project, run all six files in order and verify each completes without SQL errors.
+The initial schema creates the business tables, per-gym RLS policies, relationship checks, payment-reconciliation triggers and dashboard-summary RPC. The follow-up migrations harden function grants, keep tenant helpers outside the API-exposed `public` schema, fix relationship validation, add the private login lock table, add foreign-key indexes, and optimize row-level security policies. These migrations have **not** been confirmed applied to the newly selected Supabase project. Before connecting the website, reconcile the existing partial schema against the migration SQL, execute the missing security policies and application functions, and verify each step. Do not rerun the entire initial migration blindly against existing tables.
 
 ### 2. Create the first Admin
 
@@ -48,7 +48,7 @@ Install the Supabase CLI and authenticate from a terminal:
 ```bash
 npm install
 npx supabase login
-npx supabase link --project-ref pnhpkraqsahpebjiynwz
+npx supabase link --project-ref mnflpbdtfvksbxjdsvdf
 npx supabase functions deploy admin-users
 npx supabase functions deploy secure-login
 ```
@@ -63,7 +63,7 @@ In Supabase Authentication settings, disable **Allow new users to sign up**. Rep
 
 In Vercel → RepCount → **Settings → Environment Variables**, set both variables for Production (and Preview if needed):
 
-- `VITE_SUPABASE_URL` = `https://pnhpkraqsahpebjiynwz.supabase.co`
+- `VITE_SUPABASE_URL` = `https://mnflpbdtfvksbxjdsvdf.supabase.co`
 - `VITE_SUPABASE_PUBLISHABLE_KEY` = the Supabase project's current publishable key
 
 Redeploy after saving these values. These are the only Supabase configuration values that belong in the browser bundle. **Never create a `VITE_SUPABASE_SERVICE_ROLE_KEY` or place a database connection string in a frontend variable.**
