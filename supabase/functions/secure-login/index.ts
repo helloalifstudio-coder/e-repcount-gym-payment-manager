@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
+import { loginBucketMaterial } from "../_shared/loginThrottle.ts";
 
 const MAX_FAILED_ATTEMPTS=3;
 const MAX_BODY_BYTES=4096;
@@ -36,12 +37,11 @@ function json(req:Request,status:number,body:Record<string,unknown>):Response {
  return new Response(JSON.stringify(body),{status,headers:headers(req)});
 }
 function rows<T>(v:unknown):T[]{return Array.isArray(v)?v as T[]:v&&typeof v==="object"?[v as T]:[];}
-async function makeBucketHash(secret:string,req:Request,browserId:string):Promise<string>{
+async function makeBucketHash(secret:string,req:Request,email:string):Promise<string>{
  const ip=req.headers.get("cf-connecting-ip")?.trim()||req.headers.get("x-real-ip")?.trim()||
   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown-ip";
- const ua=(req.headers.get("user-agent")??"unknown-agent").slice(0,300);
- const origin=req.headers.get("origin")??"no-origin";
- const material=new TextEncoder().encode(["repcount-login-v1",ip,ua,origin,browserId].join("\n"));
+ // Client-supplied browser IDs, Origin and User-Agent are never a security boundary.
+ const material=new TextEncoder().encode(loginBucketMaterial(email,ip));
  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const bytes=new Uint8Array(await crypto.subtle.sign("HMAC",key,material));
  return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
@@ -62,9 +62,7 @@ Deno.serve(async(req:Request)=>{
  try{body=await req.json();}catch{return json(req,400,{code:"INVALID_REQUEST",message:"Invalid sign-in request."});}
  const email=typeof body.email==="string"?body.email.trim().toLowerCase():"";
  const password=typeof body.password==="string"?body.password:"";
- const browserId=typeof body.browserId==="string"?body.browserId:"";
- if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||password.length<1||password.length>1024||
-    !/^[A-Za-z0-9_-]{24,100}$/.test(browserId)){
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||password.length<1||password.length>1024){
   return json(req,400,{code:"INVALID_REQUEST",message:"Enter a valid email address and password."});
  }
  const url=Deno.env.get("SUPABASE_URL");
@@ -74,12 +72,12 @@ Deno.serve(async(req:Request)=>{
  const auth=createClient(url,publishable,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
  const admin=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
  try{
-  const bucket=await makeBucketHash(secret,req,browserId);
+  const bucket=await makeBucketHash(secret,req,email);
   const {data:lockData,error:lockError}=await admin.rpc("login_lock_status",{p_bucket_hash:bucket});
   if(lockError)return unavailable(req);
   const current=lockRow(lockData);
   if(current?.is_locked&&current.locked_until)return json(req,429,{code:"LOGIN_LOCKED",
-    message:"Too many failed sign-in attempts. This browser is locked for 24 hours.",lockedUntil:current.locked_until,attemptsRemaining:0});
+    message:"Too many failed sign-in attempts. Sign-in is blocked for this account and network for 24 hours.",lockedUntil:current.locked_until,attemptsRemaining:0});
   const {data:authData,error:authError}=await auth.auth.signInWithPassword({email,password});
   if(authError||!authData.user||!authData.session){
    const status=Number((authError as {status?:number}|null)?.status??0);
