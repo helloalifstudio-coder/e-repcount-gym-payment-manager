@@ -711,6 +711,48 @@ const session = {
     }
   },
 
+  async sendResetLink({ email }) {
+    try {
+      const client = requireSupabase();
+      const normalizedEmail = String(email ?? '').trim().toLowerCase();
+      if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        return { ok: false, error: { message: 'Enter a valid email address.' } };
+      }
+      // Supabase requires the exact production/reset redirect to be allowlisted
+      // in Authentication > URL Configuration. Never expose privileged keys.
+      const redirectTo = new URL('/reset-password', window.location.origin).toString();
+      const { error } = await client.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
+      if (error) return { ok: false, error: { message: 'Unable to send the reset email right now. Please try again later.' } };
+      // A generic success response avoids revealing which emails have accounts.
+      return { ok: true };
+    } catch {
+      return { ok: false, error: { message: 'Password recovery is temporarily unavailable. Please try again later.' } };
+    }
+  },
+
+  async resetPassword({ newPassword }) {
+    try {
+      const client = requireSupabase();
+      if (typeof newPassword !== 'string' || newPassword.length < 12) {
+        return { ok: false, error: { message: 'Use a password with at least 12 characters.' } };
+      }
+      // A recovery link establishes a temporary Supabase Auth session via PKCE.
+      // Without a valid session, updateUser cannot change any password.
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        return { ok: false, error: { message: 'Your password reset link is missing or expired. Request a new one.' } };
+      }
+      const { error } = await client.auth.updateUser({ password: newPassword });
+      if (error) return { ok: false, error: { message: error.message || 'Password reset failed.' } };
+      await client.auth.signOut();
+      cachedAppUser = null;
+      cachedAuthUserId = null;
+      return { ok: true };
+    } catch {
+      return { ok: false, error: { message: 'Password reset failed. Request a new reset link and try again.' } };
+    }
+  },
+
   async logout() {
     const client = requireSupabase();
     const { error } = await client.auth.signOut();
