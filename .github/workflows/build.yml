@@ -29,8 +29,10 @@ jobs:
             npm cache clean --force
             npm install --no-audit --no-fund
           }
-      - name: Unit-test isolated customer demo
-        run: node --test tests/*.test.mjs
+      - name: Test demo, renewal logic and gym installer
+        run: npm test
+      - name: Generate example fresh-gym database installer
+        run: npm run setup:gym -- --gym "CI Test Gym" --admin-email owner@example.com --project-ref abcdefghijklmnopqrst
       - name: Build production bundle
         run: npm run build
         env:
@@ -56,7 +58,7 @@ jobs:
           from glob import glob
           from pglast import parse_sql
 
-          paths = sorted(glob("supabase/migrations/*.sql")) + ["supabase/bootstrap_admin.sql"]
+          paths = sorted(glob("supabase/migrations/*.sql")) + ["supabase/bootstrap_admin.sql", "supabase/install.sql", ".repcount-setup/01_create_database.sql", ".repcount-setup/02_create_first_admin.sql"]
           for path in paths:
               parse_sql(open(path, encoding="utf-8").read())
               print(f"SQL parsed: {path}")

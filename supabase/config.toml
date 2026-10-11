@@ -1,8 +1,10 @@
-project_id = "mnflpbdtfvksbxjdsvdf"
+# Local Supabase project name only; NOT your production Supabase project ID.
+# Link each new gym using: npx supabase link --project-ref <gym-project-ref>
+project_id = "repcount-local"
 
 [functions.admin-users]
 verify_jwt = true
 
 [functions.secure-login]
-# Pre-login endpoint verifies credentials itself because no JWT exists yet.
+# Public pre-auth endpoint; the function validates password and checks the gym itself.
 verify_jwt = false

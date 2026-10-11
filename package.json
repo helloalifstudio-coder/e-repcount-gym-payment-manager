@@ -1,12 +1,15 @@
 {
-  "name": "my-app",
+  "name": "repcount-gym",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "npm test && vite build",
+    "preview": "vite preview",
+    "setup:gym": "node scripts/setup-gym.mjs",
+    "setup:check": "node scripts/check-setup.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -9,15 +9,30 @@ declare
   gym_name text := 'REPLACE_WITH_GYM_NAME';
   new_user_id uuid;
   new_gym_id uuid;
+  confirmed_at timestamptz;
 begin
-  select u.id
-    into new_user_id
+  if admin_email like '%REPLACE_WITH%' or gym_name like '%REPLACE_WITH%' then
+    raise exception 'Replace the gym name and Admin email placeholders before running bootstrap.';
+  end if;
+  if length(trim(gym_name)) < 1 or length(gym_name) > 100 then
+    raise exception 'Enter a valid gym name (1–100 characters).';
+  end if;
+  if exists (select 1 from public.gyms) then
+    raise exception 'This Supabase project already contains a gym. Use a NEW project for each gym.';
+  end if;
+
+  select u.id, u.email_confirmed_at
+    into new_user_id, confirmed_at
   from auth.users u
   where lower(u.email) = admin_email
   limit 1;
 
   if new_user_id is null then
     raise exception 'Create and auto-confirm the first Admin in Supabase Auth before running this script.';
+  end if;
+
+  if confirmed_at is null then
+    raise exception 'The first Admin must have a confirmed email. Confirm the account in Supabase Auth first.';
   end if;
 
   if exists (select 1 from public.gym_users gu where gu.user_id = new_user_id) then
