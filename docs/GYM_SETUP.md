@@ -17,7 +17,7 @@ The wizard prepares four files:
 3. **03_vercel_environment.txt** — public frontend URL, publishable key placeholder and required demo toggle.
 4. **04_setup_checklist.md** — exact instructions customized for the gym.
 
-Never commit the generated folder or email/password lists to GitHub.
+Never commit the generated folder or email/password lists to GitHub. If you cannot use the wizard, paste the already committed [one-paste SQL file](../supabase/install.sql) in the new project's SQL Editor, then manually fill the two placeholders in [bootstrap_admin.sql](../supabase/bootstrap_admin.sql). Do not commit the filled bootstrap copy.
 
 ## Step 2 — Create the database and owner account
 
