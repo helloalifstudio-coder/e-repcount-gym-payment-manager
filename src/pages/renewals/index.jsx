@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/hooks/useFetch';
 import { sdk } from '@/services/sdk';
-import { renewalStatus, renewalStats, reminderUrl, todayKey } from '@/services/renewalLogic';
+import { renewalStatus, reminderUrl, todayKey } from '@/services/renewalLogic';
 import { getTableAccess } from '@/services/userPermissions';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
@@ -17,16 +17,6 @@ export const nav = { label:'Renewals', icon:'CalendarClock', order:2, profiles:[
 const money = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(n||0));
 const today = todayKey();
 
-async function allRows(table, fields) {
-  const rows=[];
-  for (let page=1;page<=100;page++){
-    const result=await sdk.table(table).select(fields).page(page,100).fetch();
-    if(!result.success) throw new Error(result.message||'Could not load memberships.');
-    rows.push(...result.data);
-    if(!result.hasMore)return rows;
-  }
-  throw new Error('Too many records; please contact your administrator.');
-}
 const tabLabels = {
   all:'All members',soon:'Next 7 days',today:'Today',expired:'Expired','not-set':'Date missing'
 };
@@ -42,28 +32,31 @@ export default function Renewals() {
   const [params,setParams]=useSearchParams();
   const filter=tabLabels[params.get('view')]?params.get('view'):'all';
   const [search,setSearch]=useState('');
+  const [debouncedSearch,setDebouncedSearch]=useState('');
+  const [page,setPage]=useState(1);
   const [selected,setSelected]=useState(null);
   const [planId,setPlanId]=useState('');
   const [method,setMethod]=useState('UPI');
   const [paidOn,setPaidOn]=useState(todayKey());
   const [saving,setSaving]=useState(false);
   const requestId=useRef(null);
-  const {data,loading,error,run}=useFetch(async()=>{
-    const [members,plans]=await Promise.all([
-      allRows('gym_members_c',['Id','Name','phone_c','plan_c','due_date_c','status_c']),
-      allRows('plans_c',['Id','Name','price_c','duration_c','active_c']),
-    ]);
-    return {members,plans};
+  useEffect(()=>{
+    const timer=setTimeout(()=>setDebouncedSearch(search.trim()),250);
+    return ()=>clearTimeout(timer);
+  },[search]);
+  const {data,loading,error,run}=useFetch(()=>
+    sdk.directory.list({search:debouncedSearch,state:filter,page,pageSize:25}),
+    [debouncedSearch,filter,page]);
+  const {data:plansResult,loading:plansLoading}=useFetch(async()=>{
+    const r=await sdk.table('plans_c').select(['Id','Name','price_c','duration_c','active_c']).page(1,100).fetch();
+    if(!r.success)throw new Error(r.message||'Could not load plans');
+    return r.data;
   },[]);
-  const members=data?.members??[];
-  const plans=data?.plans??[];
-  const stats=renewalStats(members,today);
-  const rows=useMemo(()=>members.filter(m=>{
-    if(search && !((m.Name??'')+' '+(m.phone_c??'')).toLowerCase().includes(search.toLowerCase()))return false;
-    const status=renewalStatus(m,today);
-    if(filter==='soon')return status==='soon'||status==='today';
-    return filter==='all'||status===filter;
-  }).sort((a,b)=>String(a.due_date_c??'9999').localeCompare(String(b.due_date_c??'9999'))||String(a.Name).localeCompare(String(b.Name))),[members,search,filter]);
+  const plans=plansResult??[];
+  const stats={active:0,soon:0,today:0,expired:0,...data?.stats};
+  const rows=data?.rows??[];
+  const total=Number(data?.total??0);
+  const pages=Math.max(1,Math.ceil(total/25));
   const chosenPlan=plans.find(p=>String(p.Id)===String(planId));
   function begin(member){
     requestId.current=crypto.randomUUID();
@@ -112,9 +105,9 @@ export default function Renewals() {
       <div className="flex flex-col gap-3 border-b border-border p-4">
         <div className="flex flex-wrap gap-2">
           {Object.entries(tabLabels).map(([key,label])=><Button key={key} size="sm" variant={filter===key?'default':'outline'}
-            onClick={()=>setParams(key==='all'?{}:{view:key})}>{label}</Button>)}
+            onClick={()=>{setPage(1);setParams(key==='all'?{}:{view:key});}}>{label}</Button>)}
         </div>
-        <Input className="max-w-lg" aria-label="Search renewals" placeholder="Search by member name or phone" value={search} onChange={e=>setSearch(e.target.value)}/>
+        <Input className="max-w-lg" aria-label="Search renewals" placeholder="Search by member name or phone" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
       </div>
       {loading?<p className="p-6 text-sm text-muted-foreground">Loading membership renewal dates…</p>
       :error?<div className="p-6" role="alert">Unable to load renewals: {error.message}<Button onClick={run} variant="outline" className="ml-3">Retry</Button></div>
@@ -140,6 +133,13 @@ export default function Renewals() {
           </article>
         })}
       </div>}
+      {!loading&&!error&&<div className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-4 text-sm text-muted-foreground">
+        <span>{total.toLocaleString('en-IN')} matches · Page {page} of {pages}</span>
+        <div className="flex gap-2">
+          <Button variant="outline" disabled={page<=1} onClick={()=>setPage(n=>Math.max(1,n-1))}>Previous</Button>
+          <Button variant="outline" disabled={page>=pages} onClick={()=>setPage(n=>n+1)}>Next</Button>
+        </div>
+      </div>}
     </section>
     <p className="text-xs text-muted-foreground">WhatsApp reminders open a prefilled message for staff to review and send. They are not sent automatically. Old unpaid fee cycles remain under Dues for exceptional cases.</p>
     {selected&&<div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setSelected(null);}}>
@@ -163,7 +163,7 @@ export default function Renewals() {
             </select></div>
           <p className="rounded-md bg-muted p-3 text-sm">Payment received: <strong>{chosenPlan?money(chosenPlan.price_c):'Select a plan'}</strong>. Paying early preserves remaining membership days.</p>
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={()=>setSelected(null)}>Cancel</Button>
-            <Button type="submit" disabled={saving||!chosenPlan}>{saving?'Recording…':'Confirm payment & renew'}</Button></div>
+            <Button type="submit" disabled={saving||!chosenPlan||plansLoading}>{saving?'Recording…':'Confirm payment & renew'}</Button></div>
         </form>
       </section>
     </div>}
