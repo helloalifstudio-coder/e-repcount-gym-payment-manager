@@ -100,3 +100,13 @@ test('10,000 member CSV entries produce a bounded SQL preparation package offlin
   assert.match(sql,/Member 10000/);
  }finally{rmSync(f.folder,{recursive:true,force:true});}
 });
+
+test('rerun cannot silently leave or reuse SQL from an older gym import',()=>{
+ const f=fixture();
+ try{
+  assert.equal(run(f.input,f.out).status,0);
+  const second=run(f.input,f.out);
+  assert.notEqual(second.status,0);
+  assert.match(second.stderr,/already contains files/);
+ }finally{rmSync(f.folder,{recursive:true,force:true});}
+});
