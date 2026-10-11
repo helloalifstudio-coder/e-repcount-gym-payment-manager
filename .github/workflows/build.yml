@@ -29,6 +29,8 @@ jobs:
             npm cache clean --force
             npm install --no-audit --no-fund
           }
+      - name: Unit-test isolated customer demo
+        run: node --test tests/demoSdk.test.mjs
       - name: Build production bundle
         run: npm run build
         env:
