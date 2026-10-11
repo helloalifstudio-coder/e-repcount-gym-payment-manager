@@ -43,7 +43,7 @@ BEGIN
    RAISE EXCEPTION 'Invalid renewal status filter';
  END IF;
  IF length(trim(coalesce(p_search,'')))>80 THEN RAISE EXCEPTION 'Search term too long'; END IF;
- safe_pattern := '%' || replace(replace(replace(term,E'\\',E'\\\\'),'%','\\%'),'_','\\_') || '%';
+ safe_pattern := '%' || replace(replace(replace(term,chr(92),chr(92)||chr(92)),'%',chr(92)||'%'),'_',chr(92)||'_') || '%';
  WITH pool AS MATERIALIZED (
    SELECT m.id,m.name,m.phone_c,m.email_c,m.plan_c,m.due_date_c,m.status_c,
           p.name plan_name,p.price_c plan_price,p.duration_c plan_duration,p.active_c plan_active,
@@ -104,7 +104,7 @@ DECLARE
 BEGIN
  IF g IS NULL OR auth.uid() IS NULL THEN RAISE EXCEPTION 'Gym login required'; END IF;
  IF length(term)>80 THEN RAISE EXCEPTION 'Search term too long'; END IF;
- pattern := '%' || replace(replace(replace(term,E'\\',E'\\\\'),'%','\\%'),'_','\\_') || '%';
+ pattern := '%' || replace(replace(replace(term,chr(92),chr(92)||chr(92)),'%',chr(92)||'%'),'_',chr(92)||'_') || '%';
  IF p_kind='payments' THEN
   IF p_status NOT IN ('All','Paid','Pending','Refunded') OR p_period NOT IN ('all','today') THEN
    RAISE EXCEPTION 'Invalid payment filter';
