@@ -58,7 +58,7 @@ jobs:
           from glob import glob
           from pglast import parse_sql
 
-          paths = sorted(glob("supabase/migrations/*.sql")) + ["supabase/bootstrap_admin.sql", ".repcount-setup/01_create_database.sql", ".repcount-setup/02_create_first_admin.sql"]
+          paths = sorted(glob("supabase/migrations/*.sql")) + ["supabase/bootstrap_admin.sql", "supabase/install.sql", ".repcount-setup/01_create_database.sql", ".repcount-setup/02_create_first_admin.sql"]
           for path in paths:
               parse_sql(open(path, encoding="utf-8").read())
               print(f"SQL parsed: {path}")
