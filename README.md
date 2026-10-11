@@ -38,6 +38,14 @@ RepCount tracks members, prepaid memberships, next billing dates, manual WhatsAp
 
 For screenshots, troubleshooting, aftercare and full safeguards: **[Gym setup guide](docs/GYM_SETUP.md)**.
 
+**Already running a gym with thousands of members?** Do not reenter everyone manually. Use the private, offline CSV history importer described in [Import existing gym records](docs/HISTORY_IMPORT.md). Fill the five [empty CSV templates](templates/history-import), then run:
+
+```bash
+npm run import:prepare -- --source ./private-gym-csv --gym "Gym Name" --admin-email owner@example.com
+```
+
+The command validates records and generates owner-scoped SQL in a gitignored folder. It does not change Supabase until you review and run it. Never commit customer data or keys.
+
 ## What to configure for each client
 
 | Item | Where | Belongs in frontend? |
