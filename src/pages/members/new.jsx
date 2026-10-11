@@ -81,6 +81,11 @@ export default function NewMember(){
       <section className="space-y-4 border-t border-border pt-5">
         <h2 className="font-heading text-lg font-bold">Membership & first payment</h2>
         {planError&&<p role="alert" className="text-sm text-destructive">Could not load membership plans: {planError.message}</p>}
+        {!planError&&plans&&activePlans.length===0&&<div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
+          <p className="font-semibold">First, create a membership plan</p>
+          <p className="mt-1 text-sm text-muted-foreground">Add a monthly or quarterly package with its fee. Then return here to enroll a member and collect the upfront payment.</p>
+          <Button asChild variant="outline" size="sm" className="mt-3"><Link to="/plans/new">Create first plan</Link></Button>
+        </div>}
         <div><Label htmlFor="member-plan">Membership plan</Label>
           <select id="member-plan" name="plan_c" className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.plan_c} onChange={change} disabled={saving}>
             <option value="">Choose a plan</option>
