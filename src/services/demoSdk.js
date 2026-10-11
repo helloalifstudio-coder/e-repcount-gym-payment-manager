@@ -1,4 +1,4 @@
-import { nextRenewalDate, parseDay, todayKey } from './renewalLogic.js';
+import { nextRenewalDate, parseDay, todayKey, renewalStatus, renewalStats } from './renewalLogic.js';
 
 // DEMONSTRATION ONLY: this adapter never authenticates against Supabase.
 // The fixed password is intentionally public; this mode must never access real records.
@@ -57,11 +57,12 @@ function seed() {
 }
 let fallback = null;
 function load() {
+  if (fallback) return fallback;
   try {
     const raw = localStorage.getItem(DATA_KEY);
     if(raw) {
       const data = JSON.parse(raw);
-      if(data && ['plans_c','gym_members_c','membership_dues_c','payments_c','renewals','users'].every(k=>Array.isArray(data[k]))) return data;
+      if(data && ['plans_c','gym_members_c','membership_dues_c','payments_c','renewals','users'].every(k=>Array.isArray(data[k]))) return (fallback = data);
     }
   } catch { /* disabled storage: keep the in-memory demo */ }
   return (fallback ??= seed());
@@ -304,6 +305,55 @@ export function createDemoSdk() {
       async resetPassword(){return {ok:false,error:{message:'Demo passwords cannot be changed.'}};},
     },
     table:name=>new DemoQuery(name),
+    directory: {
+      async list({search='',state='all',page=1,pageSize=25}={}) {
+        ensureLogin();
+        const db=load(),today=todayKey();
+        const query=String(search).trim().toLowerCase();
+        const filtered=db.gym_members_c.filter(m=>{
+          const current=renewalStatus(m,today);
+          return (state==='all'||current===state||(state==='soon'&&current==='today'))
+            && (!query || [m.Name,m.phone_c,m.email_c].some(f=>String(f??'').toLowerCase().includes(query)));
+        }).sort((a,b)=>String(a.due_date_c??'9999').localeCompare(String(b.due_date_c??'9999'))||String(a.Name).localeCompare(String(b.Name))||String(a.Id).localeCompare(String(b.Id)));
+        const size=Math.min(100,Math.max(1,Number(pageSize)||25));
+        const currentPage=Math.max(1,Number(page)||1);
+        const from=(currentPage-1)*size;
+        return {
+          rows:filtered.slice(from,from+size).map(m=>({...projected(m,'gym_members_c',db),renewalState:renewalStatus(m,today)})),
+          stats:renewalStats(db.gym_members_c,today),total:filtered.length,
+          hasMore:from+size<filtered.length,
+        };
+      },
+      async search(term,pageSize=25) {return this.list({search:term,page:1,pageSize});},
+    },
+    ledger: {
+      async list({kind,search='',status='All',period='all',page=1,pageSize=25}={}) {
+        ensureLogin();
+        if(!['payments','dues'].includes(kind)) throw new Error('Invalid ledger type');
+        const db=load(),table=kind==='payments'?'payments_c':'membership_dues_c';
+        const memberIndex=new Map(db.gym_members_c.map(m=>[m.Id,m]));
+        const q=String(search).trim().toLowerCase(),today=todayKey();
+        const date=new Date(today+'T12:00:00');
+        date.setDate(date.getDate()+((7-(date.getDay()||7))%7));
+        const weekEnd=todayKey(date);
+        const filtered=db[table].filter(row=>{
+          const member=memberIndex.get(row.member_c);
+          const matches=!q||[row.Name,row.method_c,member?.Name,member?.phone_c].some(v=>String(v??'').toLowerCase().includes(q));
+          if(!matches)return false;
+          if(kind==='payments')return (status==='All'||row.status_c===status)&&(period==='all'||row.paid_on_c===today);
+          return Number(row.balance_c)>0&&row.status_c!=='Waived'&&
+            (period==='all'||period==='today'&&row.due_date_c===today||
+              period==='overdue'&&row.due_date_c<today||
+              period==='week'&&row.due_date_c>today&&row.due_date_c<=weekEnd);
+        }).sort((a,b)=>{
+          const dateKey=kind==='payments'?'paid_on_c':'due_date_c',direction=kind==='payments'?-1:1;
+          return direction*String(a[dateKey]??'').localeCompare(String(b[dateKey]??''))||String(a.Id).localeCompare(String(b.Id));
+        });
+        const size=Math.min(100,Math.max(1,Number(pageSize)||25)),offset=(Math.max(1,Number(page)||1)-1)*size;
+        return {rows:filtered.slice(offset,offset+size).map(row=>projected(row,table,db)),
+          total:filtered.length,hasMore:offset+size<filtered.length};
+      },
+    },
     renewals,
     teams,
     admin:{async fetch(entity,options={}){if(entity!=='user')throw new Error('Unsupported entity.');const v=await teams.getMembers(options.pagingInfo?.offset??0,options.pagingInfo?.limit??100);

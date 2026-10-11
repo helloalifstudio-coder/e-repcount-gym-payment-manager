@@ -7,34 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import ApperIcon from '@/components/ApperIcon';
+import MemberPicker from '@/components/MemberPicker';
 import { localDateInputValue, logMutationError } from '@/utils/repcount';
 
 export const route = { path: '/payments/new', layout: 'owner', access: "profile === 'Admin_c' || profile === 'Manager_c' || profile === 'Staff_c'" };
 
 export default function NewPayment() {
   const navigate = useNavigate();
-  const { data: members } = useFetch(
-    () => sdk.table('gym_members_c')
-      .select(['Id', 'Name', 'phone_c', 'plan_c'])
-      .page(1, 100)
-      .fetch()
-      .then(result => {
-        if (!result.success) throw new Error(result.message);
-        return result.data;
-      }),
-    [],
-  );
-  const { data: dues } = useFetch(
-    () => sdk.table('membership_dues_c')
-      .select(['Id', 'Name', 'member_c', 'balance_c', 'status_c'])
-      .page(1, 100)
-      .fetch()
-      .then(result => {
-        if (!result.success) throw new Error(result.message);
-        return result.data;
-      }),
-    [],
-  );
   const [form, setForm] = useState({
     Name: `RC-${Date.now().toString().slice(-6)}`,
     member_c: '',
@@ -47,6 +26,16 @@ export default function NewPayment() {
   });
   const [saving, setSaving] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const { eq } = window.RepCountSDK.CoreSDK;
+  const { data: dues } = useFetch(async()=>{
+    if(!form.member_c)return [];
+    const result=await sdk.table('membership_dues_c')
+      .select(['Id','Name','member_c','balance_c','status_c'])
+      .where(eq('member_c',form.member_c))
+      .orderByDesc('CreatedOn').page(1,100).fetch();
+    if(!result.success)throw new Error(result.message||'Could not load this member’s unpaid fee cycles');
+    return result.data;
+  },[form.member_c]);
   const memberDues = (dues ?? []).filter(due =>
     String(due.member_c?.Id) === String(form.member_c) && Number(due.balance_c || 0) > 0,
   );
@@ -139,10 +128,7 @@ export default function NewPayment() {
       <form onSubmit={save} className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
         <div className="space-y-2">
           <Label htmlFor="member_c">Member *</Label>
-          <select id="member_c" name="member_c" value={form.member_c} onChange={chooseMember} required className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm">
-            <option value="">Choose a member</option>
-            {(members ?? []).map(member => <option key={member.Id} value={member.Id}>{member.Name} · {member.phone_c}</option>)}
-          </select>
+          <MemberPicker id="member_c" value={form.member_c} onChange={value=>chooseMember({target:{value}})} disabled={saving}/>
         </div>
         {form.member_c && (
           <div className="space-y-2">

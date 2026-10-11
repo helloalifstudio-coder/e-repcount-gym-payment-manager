@@ -36,7 +36,7 @@ export function useFetch(fetcher, depsOrOpts, maybeOpts) {
       return result;
     } catch (err) {
       if (id === callIdRef.current && err.name !== 'AbortError') {
-        setError(err.message);
+        setError(err instanceof Error ? err : new Error(String(err)));
         setLoading(false);
       }
       return undefined;

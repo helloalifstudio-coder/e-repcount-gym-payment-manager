@@ -786,6 +786,35 @@ const liveSdk = {
     },
   },
 
+  directory: {
+    async list({ search = '', state = 'all', page = 1, pageSize = 25 } = {}) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('repcount_members_page', {
+        p_search: String(search).trim().slice(0,80),
+        p_state: state,
+        p_page: page,
+        p_page_size: pageSize,
+      });
+      if (error) throw new Error(error.message || 'Could not load the member directory.');
+      const rows = data?.rows ?? [], total = Number(data?.total ?? 0);
+      return { rows, total, stats: data?.stats ?? {}, hasMore: page * pageSize < total };
+    },
+    async search(term, pageSize = 25) {
+      return this.list({ search: term, page: 1, pageSize: Math.min(100,pageSize) });
+    },
+  },
+  ledger: {
+    async list({kind, search = '',status='All',period='all',page=1,pageSize=25}) {
+      const client = requireSupabase();
+      const {data,error} = await client.rpc('repcount_ledger_page',{
+        p_kind:kind,p_search:String(search).trim().slice(0,80),
+        p_status:status,p_period:period,p_page:page,p_page_size:pageSize,
+      });
+      if (error) throw new Error(error.message || 'Could not load the payment records.');
+      const rows=data?.rows??[],total=Number(data?.total??0);
+      return {rows,total,hasMore:page*pageSize<total};
+    },
+  },
   renewals: {
     async record({ memberId, planId, paidOn, method = 'UPI', requestId }) {
       const client = requireSupabase();
