@@ -8,7 +8,7 @@ This version removes the Apper SDK runtime and uses Supabase Auth, PostgreSQL, S
 
 **Active Supabase project:** `mnflpbdtfvksbxjdsvdf` (gym). On 2026-10-10, the missing six schema/security migrations were successfully applied, along with the one-time first-Admin bootstrap and reconciliation of constraints/internal helper privileges. The seven business tables now have 19 application RLS policies, and the `admin-users` and `secure-login` functions are deployed. An existing confirmed Auth account was assigned the first Admin role in a `RepCount Gym` workspace. Older-project data was **not** transferred. Vercel's production `VITE_SUPABASE_URL` and publishable key were verified to match this project. Live sign-in using the account's password still requires browser-level verification.
 
-The old MemoryAdapter seed data and demo login seed are removed. `/login`, `/forgot-password`, and `/reset-password` are public authentication routes. All gym data and workspace pages remain protected.
+The old Apper-backed seed data was removed. An optional, isolated **client-side demo mode** now supplies fictional records and a fixed showcase login when explicitly enabled. This mode never authenticates against Supabase. `/login`, `/forgot-password`, and `/reset-password` are public authentication routes. All gym data and workspace pages remain protected.
 
 ## Architecture
 
@@ -157,3 +157,17 @@ lockouts to simulate a successful login.
 Outstanding production checks: complete password recovery with a controlled
 email address, confirm real successful sign-in and navigation in a browser,
 verify live file uploads, and enable Auth leaked-password protection.
+
+## Customer showcase mode (opt-in)
+
+Use a **separate demo deployment** or explicitly enable demo mode for a customer-only showcase. Build with `VITE_REPCOUNT_DEMO_MODE=true`. Default `false` keeps the live Supabase backend unchanged.
+
+Demo credentials (public test credentials, not security):
+- Email: `admin@gmail.com`
+- Password: `admin@123`
+
+The demo SDK does **not** initialize a Supabase client, call Edge Functions or access production tables. Sample members, plans, dues, payments, staff records, and payment reconciliation are entirely fictional. Edits stay in the visitor's browser `localStorage`; the session is tab-scoped. Settings → **Reset demo data** starts a fresh presentation. Demo staff additions are sample team entries, not real Supabase Auth users, and cannot sign in. Do not use demo mode with real customer/financial information.
+
+On Vercel, set `VITE_REPCOUNT_DEMO_MODE=true` for the intended demo environment and redeploy. This is a **build-time** Vite flag. Removing or changing the variable without redeploying will not change the already-published frontend. Do not mistake the demonstration for a secured production authentication service.
+
+For real production, unset demo mode or use `VITE_REPCOUNT_DEMO_MODE=false`, retain the Supabase publishable URL/key, and use per-user Supabase Auth with the tenant policies and database constraints.

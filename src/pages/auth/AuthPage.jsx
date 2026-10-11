@@ -50,6 +50,18 @@ export default function AuthPage() {
 
   return (
     <AuthLayout title="Welcome back" description="Sign in to manage members, membership plans and collections." icon="Dumbbell">
+      {sdk.isDemo && (
+        <div className="mb-5 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm" role="note">
+          <p className="font-semibold">Customer demo · Sample records only</p>
+          <p className="mt-1 text-muted-foreground">
+            Email: <code className="font-mono">admin@gmail.com</code> · Password: <code className="font-mono">admin@123</code>
+          </p>
+          <button type="button" className="mt-2 font-semibold text-primary underline underline-offset-2"
+            onClick={() => { setEmail('admin@gmail.com'); setPassword('admin@123'); }}>
+            Fill demo credentials
+          </button>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email address</Label>
@@ -71,7 +83,7 @@ export default function AuthPage() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot password?</Link>
+            {!sdk.isDemo && <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot password?</Link>}
           </div>
           <div className="relative">
             <Input
@@ -102,7 +114,7 @@ export default function AuthPage() {
           {loading ? 'Signing in…' : 'Sign in'}
         </Button>
         <p className="text-center text-xs leading-5 text-muted-foreground">
-          Need access? Ask your gym's administrator to create your account.
+          {sdk.isDemo ? 'This is an isolated product walkthrough. Changes are stored in this browser only.' : "Need access? Ask your gym's administrator to create your account."}
         </p>
       </form>
     </AuthLayout>

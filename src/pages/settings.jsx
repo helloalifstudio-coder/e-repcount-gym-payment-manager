@@ -95,11 +95,11 @@ export default function Settings() {
       toast.error('Enter a valid email address.');
       return;
     }
-    if (form.password.length < 12) {
+    if (!sdk.isDemo && form.password.length < 12) {
       toast.error('Use a password with at least 12 characters.');
       return;
     }
-    if (form.password !== form.confirmPassword) {
+    if (!sdk.isDemo && form.password !== form.confirmPassword) {
       toast.error('Passwords do not match.');
       return;
     }
@@ -117,8 +117,10 @@ export default function Settings() {
         lastName: form.lastName.trim(),
         profileName: form.profileName,
       });
-      toast.success('Account created', {
-        description: 'The account is active immediately. No email-verification link is required.',
+      toast.success(sdk.isDemo ? 'Demo team member added' : 'Account created', {
+        description: sdk.isDemo
+          ? 'This is a sample team record only; it cannot sign in and no email was sent.'
+          : 'The account is active immediately. No email-verification link is required.',
       });
       setForm({
         firstName: '',
@@ -208,7 +210,9 @@ export default function Settings() {
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Workspace administration</p>
           <h1 className="mt-2 font-heading text-3xl font-bold tracking-tight">Settings and users</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Create active accounts directly, assign roles and revoke access. Accounts created here are confirmed by the server without an email-verification step.
+            {sdk.isDemo
+              ? 'Showcase workspace roles and team management using fictional users. Demo team records do not create Supabase Auth accounts.'
+              : 'Create active accounts directly, assign roles and revoke access. Accounts created here are confirmed by the server without an email-verification step.'}
           </p>
         </div>
         <Button onClick={() => setShowCreate(value => !value)} className="min-h-11">
@@ -222,11 +226,26 @@ export default function Settings() {
         <div>
           <p className="text-sm font-semibold">Admin-controlled access</p>
           <p className="mt-1 text-sm leading-5 text-muted-foreground">
-            New users sign in with the email and password you set. Share temporary credentials through a private channel. Never store account passwords in this application or GitHub.
+            {sdk.isDemo
+              ? 'Demo users are sample entries only. The showcase has one fixed demo login; created team members cannot sign in.'
+              : 'New users sign in with the email and password you set. Share temporary credentials through a private channel. Never store account passwords in this application or GitHub.'}
           </p>
         </div>
       </div>
 
+      {sdk.isDemo && (
+        <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">Demo data stored in this browser</p>
+            <p className="text-xs text-muted-foreground">Reset to the original sample members, plans, fees and payments before your next customer presentation.</p>
+          </div>
+          <Button variant="outline" type="button" onClick={() => {
+            sdk.demo.reset();
+            toast.success('Sample data restored.');
+            window.location.reload();
+          }}>Reset demo data</Button>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat icon="Users" label="Workspace users" value={loading ? '—' : total} detail="Accounts assigned to this gym" />
         <Stat icon="ShieldCheck" label="Active Admins" value={loading ? '—' : adminCount} detail="Administrators with workspace access" />
@@ -237,7 +256,7 @@ export default function Settings() {
         <form onSubmit={createUser} className="space-y-5 rounded-xl border border-border bg-card p-4 md:p-6">
           <div>
             <h2 className="font-heading text-xl font-bold">Create a user account</h2>
-            <p className="mt-1 text-sm text-muted-foreground">The server creates the Supabase Auth account, confirms it and assigns the role within this workspace.</p>
+            <p className="mt-1 text-sm text-muted-foreground">{sdk.isDemo ? 'Create a fictional team member for this browser only; no real Auth account or email is created.' : 'The server creates the Supabase Auth account, confirms it and assigns the role within this workspace.'}</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -252,6 +271,8 @@ export default function Settings() {
               <Label htmlFor="email">Email address *</Label>
               <Input id="email" name="email" type="email" autoComplete="off" value={form.email} onChange={changeForm} placeholder="person@gym.com" required disabled={busy} />
             </div>
+            {!sdk.isDemo && (
+              <>
             <div className="space-y-2">
               <Label htmlFor="password">Initial password *</Label>
               <Input id="password" name="password" type="password" autoComplete="new-password" minLength={12} value={form.password} onChange={changeForm} required disabled={busy} />
@@ -261,6 +282,9 @@ export default function Settings() {
               <Label htmlFor="confirmPassword">Confirm password *</Label>
               <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={12} value={form.confirmPassword} onChange={changeForm} required disabled={busy} />
             </div>
+
+              </>
+            )}
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="profileName">Role *</Label>
               <select id="profileName" name="profileName" value={form.profileName} onChange={changeForm} disabled={busy} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
