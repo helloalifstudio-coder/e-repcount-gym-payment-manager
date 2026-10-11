@@ -39,7 +39,7 @@ try {
   if (!/^[a-z0-9]{20}$/.test(ref)) throw new Error('Supabase project reference must be 20 lowercase letters/digits (Project Settings → General).');
   const out = resolve(flags.get('out') || defaultDestination);
   const migrationsFolder = join(root, 'supabase/migrations');
-  const filenames = (await readdir(migrationsFolder)).filter(name => /^\d{14}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  const filenames = (await readdir(migrationsFolder)).filter(name => /^\d{12,14}_[a-z0-9_]+\.sql$/.test(name)).sort();
   if (filenames.length < 11 || !filenames.some(x=>x.includes('indexed_bounded_directory_api'))) {
     throw new Error('Required migrations are missing. Restore a complete RepCount fork before running setup.');
   }
