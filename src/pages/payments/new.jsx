@@ -133,7 +133,8 @@ export default function NewPayment() {
       </Link>
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Record payment</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Choose a member, enter the amount, and save.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Record a standalone payment or an exceptional pay-later fee. Paid membership renewals belong in Renewals.</p>
+        <p className="mt-2"><Link to="/renewals" className="text-sm font-semibold text-primary underline underline-offset-2">Collect membership fee and extend renewal date →</Link></p>
       </div>
       <form onSubmit={save} className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
         <div className="space-y-2">

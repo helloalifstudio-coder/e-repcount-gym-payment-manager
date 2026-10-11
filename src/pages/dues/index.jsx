@@ -11,7 +11,7 @@ import { formatLocalDate, DATE_FORMATS } from '@/utils/date';
 import { useProfile } from '@/hooks/useProfile';
 import { getTableAccess } from '@/services/userPermissions';
 export const route={path:'/dues',layout:'owner',access:"profile === 'Admin_c' || profile === 'Manager_c' || profile === 'Staff_c'"};
-export const nav={label:'Dues',icon:'CalendarClock',order:2,profiles:['Admin_c','Manager_c','Staff_c']};
+export const nav={label:'Unpaid exceptions',icon:'ReceiptText',order:10,profiles:['Admin_c','Manager_c','Staff_c']};
 const money=value=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(value||0));
 const key=date=>{const y=date.getFullYear();const m=String(date.getMonth()+1).padStart(2,'0');const d=String(date.getDate()).padStart(2,'0');return `${y}-${m}-${d}`;};
 function monday(date){const copy=new Date(date.getFullYear(),date.getMonth(),date.getDate());copy.setDate(copy.getDate()-((copy.getDay()+6)%7));return copy;}
@@ -56,7 +56,7 @@ export default function Dues(){
  const rows = data?.rows ?? [];
  return <div className="space-y-6">
    <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-     <div className="min-w-0"><h1 className="text-2xl font-heading font-semibold tracking-tight">Dues</h1><p className="mt-1 text-sm text-muted-foreground">Check who needs to pay, review a due, or send a reminder.</p></div>
+     <div className="min-w-0"><h1 className="text-2xl font-heading font-semibold tracking-tight">Unpaid fee exceptions</h1><p className="mt-1 text-sm text-muted-foreground">Only for members allowed to pay later. Standard upfront-paid memberships and expiry reminders are managed under Renewals.</p></div>
      <Button asChild className="min-h-11 shrink-0 active:scale-[0.98]"><Link to="/payments/new"><ApperIcon name="Plus" size={16} className="mr-2"/>Record payment</Link></Button>
    </header>
    <div className="space-y-3">
