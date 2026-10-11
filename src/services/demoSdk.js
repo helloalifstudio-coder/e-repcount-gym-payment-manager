@@ -331,12 +331,13 @@ export function createDemoSdk() {
         ensureLogin();
         if(!['payments','dues'].includes(kind)) throw new Error('Invalid ledger type');
         const db=load(),table=kind==='payments'?'payments_c':'membership_dues_c';
+        const memberIndex=new Map(db.gym_members_c.map(m=>[m.Id,m]));
         const q=String(search).trim().toLowerCase(),today=todayKey();
         const date=new Date(today+'T12:00:00');
         date.setDate(date.getDate()+((7-(date.getDay()||7))%7));
         const weekEnd=todayKey(date);
         const filtered=db[table].filter(row=>{
-          const member=db.gym_members_c.find(m=>m.Id===row.member_c);
+          const member=memberIndex.get(row.member_c);
           const matches=!q||[row.Name,row.method_c,member?.Name,member?.phone_c].some(v=>String(v??'').toLowerCase().includes(q));
           if(!matches)return false;
           if(kind==='payments')return (status==='All'||row.status_c===status)&&(period==='all'||row.paid_on_c===today);
