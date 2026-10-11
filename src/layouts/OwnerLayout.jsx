@@ -13,7 +13,7 @@ import { sdk } from '@/services/sdk';
 const primaryLinks = [
   { label: 'Home', to: '/', icon: 'LayoutDashboard' },
   { label: 'Members', to: '/members', icon: 'Users' },
-  { label: 'Dues', to: '/dues', icon: 'CalendarClock' },
+  { label: 'Renewals', to: '/renewals', icon: 'CalendarClock' },
   { label: 'Payments', to: '/payments', icon: 'Wallet' },
 ];
 
