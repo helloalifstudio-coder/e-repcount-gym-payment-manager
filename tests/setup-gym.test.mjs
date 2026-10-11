@@ -21,6 +21,11 @@ test('fork installer creates complete SQL, isolated first Admin and Vercel guide
   assert.deepEqual(readdirSync(temp).sort(),[
    '01_create_database.sql','02_create_first_admin.sql','03_vercel_environment.txt','04_setup_checklist.md']);
   const sql=readFileSync(join(temp,'01_create_database.sql'),'utf8');
+  const committed=readFileSync(join(root,'supabase/install.sql'),'utf8');
+  assert.ok(committed.includes('repcount_members_page'));
+  assert.ok(committed.includes('202610100001_initial_schema.sql'));
+  assert.ok(committed.includes('20261011121500_fix_search_escaping.sql'));
+
   assert.equal((sql.match(/BEGIN MIGRATION/g)??[]).length,11);
   assert.ok(sql.includes('202610100001_initial_schema.sql'));
   assert.ok(sql.includes('20261011121500_fix_search_escaping.sql'));
