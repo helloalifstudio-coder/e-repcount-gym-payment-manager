@@ -22,7 +22,7 @@ From the fork's terminal, execute:
 
     npm run import:prepare -- --source ./private-gym-csv --gym "Actual Gym Name" --admin-email owner@example.com
 
-The offline validator checks ID uniqueness, referenced plans/members/payments, calendar dates, amounts, malformed CSV, duplicate receipts and inconsistent renewal periods. The command does NOT contact Supabase or mutate any records.
+The offline validator checks ID uniqueness, referenced plans/members/payments, calendar dates, amounts, malformed CSV, duplicate receipts and inconsistent renewal periods. The command does NOT contact Supabase or mutate any records. It refuses to overwrite a previous output package; move or archive the prior private import folder before preparing another run. It also refuses to put customer SQL inside a Git-trackable repository path.
 
 Output is written to the gitignored .repcount-setup/import/ folder:
 
