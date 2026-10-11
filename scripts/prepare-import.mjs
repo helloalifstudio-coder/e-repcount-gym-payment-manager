@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Offline migration tool: turn legacy gym CSV exports into SQL Editor / psql scripts.
 // No passwords, API keys, Supabase client, or network access are used here.
-import {readFile, mkdir, writeFile} from 'node:fs/promises';
-import {join, resolve} from 'node:path';
+import {readFile, readdir, mkdir, writeFile} from 'node:fs/promises';
+import {join, resolve, relative, isAbsolute, sep} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import process from 'node:process';
 
+const REPO_ROOT=fileURLToPath(new URL('../',import.meta.url));
 const HELP = 'Usage: npm run import:prepare -- --source ./gym-csv --gym "Gym Name" --admin-email owner@example.com [--out /safe/private/path]';
 const fields = {
   plans: ['id','name','duration','price','active','description'],
@@ -127,11 +129,16 @@ async function main() {
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)throw new Error('A valid verified Admin email is required.');
  const source=resolve(args.source);
  const out=resolve(args.out||'.repcount-setup/import');
+ const relativeOut=relative(REPO_ROOT,out);
+ if(relativeOut && !relativeOut.startsWith('..') && !isAbsolute(relativeOut) &&
+    relativeOut!=='.repcount-setup' && !relativeOut.startsWith('.repcount-setup'+sep)) {
+   throw new Error('Refusing to write personal data into an unignored repository path. Use .repcount-setup/import or a private folder OUTSIDE the repository.');
+ }
  const rows={};const ids={};
  for(const [kind,expected] of Object.entries(fields)){
    let raw;
    try{raw=await readFile(join(source,kind+'.csv'),'utf8');}
-   catch(e){if(e.code==='ENOENT'&&['dues','payments','renewals'].includes(kind)){rows[kind]=[];ids[kind]=new Set();continue;}throw e;}
+   catch(e){if(e.code==='ENOENT'&&['plans','dues','payments','renewals'].includes(kind)){rows[kind]=[];ids[kind]=new Set();continue;}throw e;}
    if(raw.length>20000000)throw new Error(kind+'.csv exceeds 20 MB. Split this migration into separate verified batches.');
    const parsed=parseCsv(raw);
    for(const entry of parsed) {
@@ -227,7 +234,9 @@ async function main() {
    ['05_renewals.sql','membership_renewals',renewals,
       [['id','uuid'],['request_id','uuid'],['member_id','uuid'],['plan_id','uuid'],['payment_id','uuid'],['paid_on','date'],['started_on','date'],['next_renewal_on','date'],['amount','numeric']]],
  ];
- await mkdir(out,{recursive:true});
+ const previous=await readdir(out).catch(e=>e.code==='ENOENT'?[]:Promise.reject(e));
+ if(previous.length)throw new Error('The import output folder already contains files. Move/archive the prior package before creating a new one; never mix SQL from two imports.');
+ await mkdir(out,{recursive:true,mode:0o700});
  const intro=['# Validated gym import','Gym: '+gym,'Admin: '+email,
    'Plans: '+plans.length,'Members: '+members.length,'Fee cycles: '+dues.length,
    'Payment receipts: '+payments.length,'Historical renewal periods: '+renewals.length,
