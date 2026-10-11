@@ -786,6 +786,31 @@ const liveSdk = {
     },
   },
 
+  renewals: {
+    async record({ memberId, planId, paidOn, method = 'UPI', requestId }) {
+      const client = requireSupabase();
+      await resolveCurrentAppUser(); // Ensure verified workspace membership before RPC.
+      const { data, error } = await client.rpc('record_membership_renewal', {
+        p_member_id: memberId,
+        p_plan_id: planId,
+        p_paid_on: paidOn,
+        p_method: method,
+        p_request_id: requestId ?? crypto.randomUUID(),
+      });
+      if (error) throw new Error(error.message || 'Could not record renewal. Check the renewal migration.');
+      return data;
+    },
+    async list(limit = 100) {
+      const client = requireSupabase();
+      await resolveCurrentAppUser();
+      const { data, error } = await client.from('membership_renewals')
+        .select('id,member_id,plan_id,payment_id,paid_on,started_on,next_renewal_on,amount,created_at')
+        .order('created_at', { ascending: false })
+        .limit(Math.min(500, Math.max(1, Number(limit) || 100)));
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  },
   async dashboardSummary(today) {
     const client = requireSupabase();
     const { data, error } = await client.rpc('dashboard_summary', { p_today: today });
