@@ -95,11 +95,11 @@ export default function Settings() {
       toast.error('Enter a valid email address.');
       return;
     }
-    if (form.password.length < 12) {
+    if (!sdk.isDemo && form.password.length < 12) {
       toast.error('Use a password with at least 12 characters.');
       return;
     }
-    if (form.password !== form.confirmPassword) {
+    if (!sdk.isDemo && form.password !== form.confirmPassword) {
       toast.error('Passwords do not match.');
       return;
     }
@@ -271,6 +271,8 @@ export default function Settings() {
               <Label htmlFor="email">Email address *</Label>
               <Input id="email" name="email" type="email" autoComplete="off" value={form.email} onChange={changeForm} placeholder="person@gym.com" required disabled={busy} />
             </div>
+            {!sdk.isDemo && (
+              <>
             <div className="space-y-2">
               <Label htmlFor="password">Initial password *</Label>
               <Input id="password" name="password" type="password" autoComplete="new-password" minLength={12} value={form.password} onChange={changeForm} required disabled={busy} />
@@ -280,6 +282,9 @@ export default function Settings() {
               <Label htmlFor="confirmPassword">Confirm password *</Label>
               <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={12} value={form.confirmPassword} onChange={changeForm} required disabled={busy} />
             </div>
+
+              </>
+            )}
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="profileName">Role *</Label>
               <select id="profileName" name="profileName" value={form.profileName} onChange={changeForm} disabled={busy} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
