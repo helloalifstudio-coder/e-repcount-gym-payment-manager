@@ -85,6 +85,10 @@ Acceptance checklist:
 
 **Is 10,000+ members enough?** Server-side search and pagination, renewal indexes and controlled database writes have been tested with rolled-back synthetic 10,000-member and 10,000-payment datasets. Response times, concurrent users, backups and plan limits must still be checked in real production conditions. See [scalability guide](scaling-10000-members.md).
 
+## Existing member history
+
+If the gym has Excel, notebooks or an older software export, use the [private historical data import guide](HISTORY_IMPORT.md). Collect stable member IDs, verified next-renewal dates, fee plans, real receipts and any documented renewal periods. Do not invent history or assume an unpaid debt for a prepaid membership. Generate owner-guarded SQL with **npm run import:prepare** and reconcile record counts before the handover.
+
 ## Owner handover
 
 Give the client their Vercel website, GitHub fork, Supabase project, training for Members → Renewals → Payments → Settings, and their own account recovery instructions. The client must own all three services; Alif Growth Media should request collaborator permissions only when needed. Keep customer records and private credentials out of the demo and GitHub.
