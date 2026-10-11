@@ -89,3 +89,5 @@ logs
 *.pid
 *.seed
 *.pid.lock
+# Generated per-gym setup (Admin email and deployment settings; never commit)
+.repcount-setup/
