@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useFetch } from '@/hooks/useFetch';
 import { sdk } from '@/services/sdk';
-import { renewalStatus, renewalStats, reminderUrl, todayKey } from '@/services/renewalLogic';
+import { renewalStatus, reminderUrl, todayKey } from '@/services/renewalLogic';
 import { Button } from '@/components/ui/button';
 import ApperIcon from '@/components/ApperIcon';
 import { useProfile } from '@/hooks/useProfile';
@@ -11,18 +11,6 @@ export const route={path:'/',layout:'owner',access:"profile === 'Admin_c' || pro
 export const nav={label:'Overview',icon:'LayoutDashboard',order:0};
 const today=todayKey();
 const money=n=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(n||0));
-async function allMembers(){
-  const members=[];
-  for(let page=1;page<=100;page++){
-    const r=await sdk.table('gym_members_c')
-      .select(['Id','Name','phone_c','plan_c','due_date_c','status_c'])
-      .page(page,100).fetch();
-    if(!r.success)throw new Error(r.message||'Could not load members');
-    members.push(...r.data);
-    if(!r.hasMore)return members;
-  }
-  throw new Error('Membership directory exceeded the supported page limit.');
-}
 const Metric=({label,value,detail,icon,to})=><Link to={to} className="block rounded-lg border border-border bg-card p-4 transition hover:border-primary/40 hover:shadow-sm">
   <ApperIcon name={icon} size={20} className="text-primary"/>
   <p className="mt-3 font-heading text-3xl font-bold">{value}</p>
@@ -33,12 +21,16 @@ const Metric=({label,value,detail,icon,to})=><Link to={to} className="block roun
 export default function Home(){
   const {profile}=useProfile();
   const {canCreate}=getTableAccess(profile,'gym_members_c');
-  const {data:members,loading,error,run}=useFetch(allMembers,[]);
+  const {data:overview,loading,error,run}=useFetch(async()=>{
+    const [expiring,upcoming]=await Promise.all([
+      sdk.directory.list({state:'expired',page:1,pageSize:4}),
+      sdk.directory.list({state:'soon',page:1,pageSize:4}),
+    ]);
+    return {stats:upcoming.stats,attention:[...expiring.rows,...upcoming.rows]};
+  },[]);
   const {data:summary}=useFetch(()=>sdk.dashboardSummary(today),[today]);
-  const records=members??[];
-  const stats=renewalStats(records,today);
-  const attention=records.filter(m=>['expired','today','soon'].includes(renewalStatus(m,today)))
-    .sort((a,b)=>String(a.due_date_c).localeCompare(String(b.due_date_c))).slice(0,8);
+  const stats={active:0,soon:0,today:0,expired:0,...overview?.stats};
+  const attention=overview?.attention??[];
   return <div className="space-y-6 pb-5">
     <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div>
