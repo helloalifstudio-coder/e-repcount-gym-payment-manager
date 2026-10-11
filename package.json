@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm test && vite build",
     "preview": "vite preview",
     "setup:gym": "node scripts/setup-gym.mjs",
     "setup:check": "node scripts/check-setup.mjs",
