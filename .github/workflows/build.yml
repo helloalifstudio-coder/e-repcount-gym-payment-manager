@@ -30,7 +30,7 @@ jobs:
             npm install --no-audit --no-fund
           }
       - name: Unit-test isolated customer demo
-        run: node --test tests/demoSdk.test.mjs
+        run: node --test tests/*.test.mjs
       - name: Build production bundle
         run: npm run build
         env:
