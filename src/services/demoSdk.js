@@ -1,9 +1,11 @@
+import { nextRenewalDate, parseDay, todayKey } from './renewalLogic.js';
+
 // DEMONSTRATION ONLY: this adapter never authenticates against Supabase.
 // The fixed password is intentionally public; this mode must never access real records.
 // All customer-facing sample data is held in this visitor's browser.
 export const DEMO_LOGIN = Object.freeze({ email: 'admin@gmail.com', password: 'admin@123' });
 const SESSION_KEY = 'repcount.demo.session.v1';
-const DATA_KEY = 'repcount.demo.data.v1';
+const DATA_KEY = 'repcount.demo.data.v2';
 const DEMO_USER = Object.freeze({
   id: 'demo-admin', Id: 'demo-admin', userId: 'demo-admin',
   gymId: 'demo-gym', profile: 'Admin_c',
@@ -25,23 +27,27 @@ function seed() {
   const members = [
     {Id:'member-1',Name:'Arjun Sharma',phone_c:'9876500011',email_c:'arjun@example.com',plan_c:'plan-pro',join_date_c:dateOffset(-90),due_date_c:dateOffset(0),status_c:'Due soon',notes_c:''},
     {Id:'member-2',Name:'Priya Mehta',phone_c:'9876500022',email_c:'priya@example.com',plan_c:'plan-basic',join_date_c:dateOffset(-60),due_date_c:dateOffset(7),status_c:'Active',notes_c:''},
-    {Id:'member-3',Name:'Rahul Nair',phone_c:'9876500033',email_c:'rahul@example.com',plan_c:'plan-premium',join_date_c:dateOffset(-130),due_date_c:dateOffset(100),status_c:'Active',notes_c:''},
+    {Id:'member-3',Name:'Rahul Nair',phone_c:'9876500033',email_c:'rahul@example.com',plan_c:'plan-premium',join_date_c:dateOffset(-130),due_date_c:dateOffset(235),status_c:'Active',notes_c:''},
     {Id:'member-4',Name:'Sneha Patel',phone_c:'9876500044',email_c:'sneha@example.com',plan_c:'plan-basic',join_date_c:dateOffset(-45),due_date_c:dateOffset(-3),status_c:'Overdue',notes_c:''},
     {Id:'member-5',Name:'Vikram Singh',phone_c:'9876500055',email_c:'vikram@example.com',plan_c:'plan-pro',join_date_c:dateOffset(-30),due_date_c:dateOffset(12),status_c:'Active',notes_c:''},
   ];
-  const dues = [
-    {Id:'due-1',Name:'FEE-2026-001',member_c:'member-1',plan_c:'plan-pro',due_date_c:dateOffset(0),period_start_c:dateOffset(-90),period_end_c:dateOffset(0),amount_due_c:3499,amount_paid_c:1500,balance_c:1999,status_c:'Partially paid',notes_c:''},
-    {Id:'due-2',Name:'FEE-2026-002',member_c:'member-2',plan_c:'plan-basic',due_date_c:dateOffset(7),period_start_c:dateOffset(-23),period_end_c:dateOffset(7),amount_due_c:1299,amount_paid_c:1299,balance_c:0,status_c:'Paid',notes_c:''},
-    {Id:'due-3',Name:'FEE-2026-003',member_c:'member-4',plan_c:'plan-basic',due_date_c:dateOffset(-3),period_start_c:dateOffset(-33),period_end_c:dateOffset(-3),amount_due_c:1299,amount_paid_c:0,balance_c:1299,status_c:'Unpaid',notes_c:''},
-    {Id:'due-4',Name:'FEE-2026-004',member_c:'member-5',plan_c:'plan-pro',due_date_c:dateOffset(12),period_start_c:dateOffset(-78),period_end_c:dateOffset(12),amount_due_c:3499,amount_paid_c:0,balance_c:3499,status_c:'Unpaid',notes_c:''},
-  ];
+  // Memberships are normally paid upfront. An expired renewal is NOT an unpaid fee.
+  // Legacy fee-cycle data starts empty; it remains available for exceptional credit cases.
+  const dues = [];
   const payments = [
-    {Id:'payment-1',Name:'RC-001',member_c:'member-1',due_c:'due-1',amount_c:1500,paid_on_c:dateOffset(-6),method_c:'UPI',status_c:'Paid',notes_c:''},
-    {Id:'payment-2',Name:'RC-002',member_c:'member-2',due_c:'due-2',amount_c:1299,paid_on_c:dateOffset(0),method_c:'Cash',status_c:'Paid',notes_c:''},
-    {Id:'payment-3',Name:'RC-003',member_c:'member-3',due_c:null,amount_c:500,paid_on_c:dateOffset(0),method_c:'Card',status_c:'Paid',notes_c:'Personal training add-on'},
+    {Id:'payment-1',Name:'REN-001',member_c:'member-1',due_c:null,amount_c:3499,paid_on_c:dateOffset(-90),method_c:'UPI',status_c:'Paid',notes_c:'Membership renewal: Quarterly Strength'},
+    {Id:'payment-2',Name:'REN-002',member_c:'member-2',due_c:null,amount_c:1299,paid_on_c:dateOffset(-23),method_c:'Cash',status_c:'Paid',notes_c:'Membership renewal: Monthly Fitness'},
+    {Id:'payment-3',Name:'REN-003',member_c:'member-3',due_c:null,amount_c:11999,paid_on_c:dateOffset(-130),method_c:'Card',status_c:'Paid',notes_c:'Membership renewal: Annual Unlimited'},
+    {Id:'payment-4',Name:'REN-004',member_c:'member-5',due_c:null,amount_c:3499,paid_on_c:dateOffset(-78),method_c:'UPI',status_c:'Paid',notes_c:'Membership renewal: Quarterly Strength'},
+  ];
+  const renewals = [
+    {id:'renewal-1',request_id:'seed-1',member_id:'member-1',plan_id:'plan-pro',payment_id:'payment-1',paid_on:dateOffset(-90),started_on:dateOffset(-90),next_renewal_on:dateOffset(0),amount:3499,created_at:dateOffset(-90)},
+    {id:'renewal-2',request_id:'seed-2',member_id:'member-2',plan_id:'plan-basic',payment_id:'payment-2',paid_on:dateOffset(-23),started_on:dateOffset(-23),next_renewal_on:dateOffset(7),amount:1299,created_at:dateOffset(-23)},
+    {id:'renewal-3',request_id:'seed-3',member_id:'member-3',plan_id:'plan-premium',payment_id:'payment-3',paid_on:dateOffset(-130),started_on:dateOffset(-130),next_renewal_on:dateOffset(235),amount:11999,created_at:dateOffset(-130)},
+    {id:'renewal-4',request_id:'seed-4',member_id:'member-5',plan_id:'plan-pro',payment_id:'payment-4',paid_on:dateOffset(-78),started_on:dateOffset(-78),next_renewal_on:dateOffset(12),amount:3499,created_at:dateOffset(-78)},
   ];
   return {
-    plans_c:plans, gym_members_c:members, membership_dues_c:dues, payments_c:payments,
+    plans_c:plans, gym_members_c:members, membership_dues_c:dues, payments_c:payments, renewals,
     users:[
       {id:'demo-admin',userId:'demo-admin',name:'Demo Administrator',email:DEMO_LOGIN.email,profile:{name:'Admin_c'},status:'active',createdOn:dateOffset(-90)},
       {id:'demo-manager',userId:'demo-manager',name:'Neha Manager',email:'neha.demo@example.com',profile:{name:'Manager_c'},status:'active',createdOn:dateOffset(-45)},
@@ -55,7 +61,7 @@ function load() {
     const raw = localStorage.getItem(DATA_KEY);
     if(raw) {
       const data = JSON.parse(raw);
-      if(data && ['plans_c','gym_members_c','membership_dues_c','payments_c','users'].every(k=>Array.isArray(data[k]))) return data;
+      if(data && ['plans_c','gym_members_c','membership_dues_c','payments_c','renewals','users'].every(k=>Array.isArray(data[k]))) return data;
     }
   } catch { /* disabled storage: keep the in-memory demo */ }
   return (fallback ??= seed());
@@ -240,6 +246,36 @@ class DemoQuery {
 }
 export function createDemoSdk() {
   function ensureLogin(){if(!authenticated())throw new Error('Sign in to the demo first.');}
+  const renewals = {
+    async list(limit = 100) {
+      ensureLogin();
+      return load().renewals.slice().sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))
+        .slice(0,Math.min(500,Math.max(1,Number(limit)||100)));
+    },
+    async record({ memberId, planId, paidOn, method = 'UPI', requestId }) {
+      ensureLogin();
+      const db = load();
+      const req = requestId || crypto.randomUUID();
+      const duplicate = db.renewals.find(r=>r.request_id===req);
+      if(duplicate) return {id:duplicate.id,paymentId:duplicate.payment_id,startDate:duplicate.started_on,nextRenewalDate:duplicate.next_renewal_on,alreadyRecorded:true};
+      const member = db.gym_members_c.find(m=>m.Id===memberId);
+      const plan = db.plans_c.find(p=>p.Id===planId && p.active_c);
+      if(!member || !plan) throw new Error('Select an existing member and active plan.');
+      if(!parseDay(paidOn) || paidOn>todayKey() || paidOn<dateOffset(-365)) throw new Error('Choose a valid payment date within the last year.');
+      if(!['Cash','UPI','Card','Bank transfer'].includes(method)) throw new Error('Choose a valid payment method.');
+      const {start,next} = nextRenewalDate({currentRenewalDate:member.due_date_c,paidOn,duration:plan.duration_c});
+      const id=crypto.randomUUID(),paymentId=crypto.randomUUID();
+      const payment={Id:paymentId,Name:'REN-'+crypto.randomUUID().replace(/-/g,''),member_c:memberId,due_c:null,amount_c:Number(plan.price_c),paid_on_c:paidOn,method_c:method,status_c:'Paid',notes_c:'Membership renewal: '+plan.Name};
+      validate('payments_c',payment,db);
+      db.payments_c.push(payment);
+      member.plan_c=planId;
+      member.due_date_c=next;
+      member.status_c='Active';
+      db.renewals.push({id,request_id:req,member_id:memberId,plan_id:planId,payment_id:paymentId,paid_on:paidOn,started_on:start,next_renewal_on:next,amount:Number(plan.price_c),created_at:new Date().toISOString()});
+      save(db);
+      return {id,paymentId,startDate:start,nextRenewalDate:next,alreadyRecorded:false};
+    },
+  };
   const teams={
     async getMembers(start=0,limit=100) {ensureLogin();const rows=load().users;return {data:rows.slice(start,start+limit),total:rows.length,hasMore:start+limit<rows.length};},
     async createMember({email,firstName='',lastName='',profileName='Staff_c'}) {
@@ -268,6 +304,7 @@ export function createDemoSdk() {
       async resetPassword(){return {ok:false,error:{message:'Demo passwords cannot be changed.'}};},
     },
     table:name=>new DemoQuery(name),
+    renewals,
     teams,
     admin:{async fetch(entity,options={}){if(entity!=='user')throw new Error('Unsupported entity.');const v=await teams.getMembers(options.pagingInfo?.offset??0,options.pagingInfo?.limit??100);
       return {data:v.data.map(u=>({Id:u.id,Name:u.name,FirstName:u.name.split(' ')[0],LastName:u.name.split(' ').slice(1).join(' '),Email:u.email,AvatarUrl:''})),total:v.total,hasMore:v.hasMore};}},
