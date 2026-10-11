@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useFetch } from '@/hooks/useFetch';
 import { sdk } from '@/services/sdk';
-import { renewalStatus, todayKey } from '@/services/renewalLogic';
+import { renewalStatus } from '@/services/renewalLogic';
 import { getTableAccess } from '@/services/userPermissions';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
@@ -12,38 +12,29 @@ import ApperIcon from '@/components/ApperIcon';
 export const route={path:'/members',layout:'owner',access:"profile === 'Admin_c' || profile === 'Manager_c' || profile === 'Staff_c'"};
 export const nav={label:'Members',icon:'Users',order:1,profiles:['Admin_c','Manager_c','Staff_c']};
 const statuses={all:'All',active:'Active',soon:'Renewal soon',today:'Renewing today',expired:'Expired',inactive:'Inactive','not-set':'Date missing'};
-async function fetchMembers(){
-  const records=[];
-  for(let page=1;page<=100;page++){
-    const result=await sdk.table('gym_members_c')
-      .select(['Id','Name','phone_c','email_c','plan_c','due_date_c','status_c'])
-      .page(page,100).fetch();
-    if(!result.success)throw new Error(result.message||'Could not load members.');
-    records.push(...result.data);
-    if(!result.hasMore)return records;
-  }
-  throw new Error('Please contact your administrator for a larger member directory.');
-}
+const PAGE_SIZE=25;
+
 export default function Members(){
   const [search,setSearch]=useState('');
+  const [debouncedSearch,setDebouncedSearch]=useState('');
   const [status,setStatus]=useState('all');
   const [page,setPage]=useState(1);
   const {profile}=useProfile();
   const {canCreate}=getTableAccess(profile,'gym_members_c');
-  const {data,loading,error,run}=useFetch(fetchMembers,[]);
-  const today=todayKey();
-  const filtered=useMemo(()=>(data??[]).filter(m=>{
-    const state=renewalStatus(m,today);
-    if(status!=='all'&&status!==state)return false;
-    return ((m.Name??'')+' '+(m.phone_c??'')+' '+(m.email_c??'')).toLowerCase().includes(search.trim().toLowerCase());
-  }).sort((a,b)=>String(a.Name).localeCompare(String(b.Name))),[data,search,status,today]);
-  const numberOfPages=Math.max(1,Math.ceil(filtered.length/25));
-  const visible=filtered.slice((Math.min(page,numberOfPages)-1)*25,Math.min(page,numberOfPages)*25);
+  useEffect(()=>{
+    const t=setTimeout(()=>setDebouncedSearch(search.trim()),250);
+    return ()=>clearTimeout(t);
+  },[search]);
+  const {data,loading,error,run}=useFetch(()=>
+    sdk.directory.list({search:debouncedSearch,state:status,page,pageSize:PAGE_SIZE}),
+    [debouncedSearch,status,page]);
+  const total=Number(data?.total??0);
+  const numberOfPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   function changeStatus(next){setStatus(next);setPage(1);}
   return <div className="space-y-6">
     <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div><h1 className="font-heading text-3xl font-bold">Gym members</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Find members and review when their memberships renew next.</p></div>
+        <p className="mt-1 text-sm text-muted-foreground">Instantly find members and their next membership renewal date.</p></div>
       {canCreate&&<Button asChild><Link to="/members/new"><ApperIcon name="UserPlus" size={16} className="mr-2"/>Add member</Link></Button>}
     </header>
     <div className="grid gap-3 sm:grid-cols-[1fr_200px]">
@@ -58,20 +49,21 @@ export default function Members(){
     :error?<div role="alert" className="rounded-lg border p-5">Could not load members: {error.message}<Button variant="outline" className="ml-3" onClick={run}>Retry</Button></div>
     :<section className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="divide-y divide-border">
-        {visible.map(m=><Link key={m.Id} to={'/members/'+m.Id}
+        {(data?.rows??[]).map(m=><Link key={m.Id} to={'/members/'+m.Id}
           className="flex items-center justify-between gap-4 p-4 transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <div className="min-w-0">
             <p className="break-words font-semibold">{m.Name}</p>
             <p className="mt-1 text-xs text-muted-foreground">{m.phone_c||'No phone'} · {m.plan_c?.Name||'No plan'}</p>
-            <p className="mt-1 text-xs">Next renewal: <strong>{m.due_date_c||'Not scheduled'}</strong> · {statuses[renewalStatus(m,today)]}</p>
+            <p className="mt-1 text-xs">Next renewal: <strong>{m.due_date_c||'Not scheduled'}</strong> · {statuses[m.renewalState||renewalStatus(m)]}</p>
           </div>
           <ApperIcon name="ChevronRight" size={18} className="shrink-0 text-muted-foreground"/>
         </Link>)}
-        {!visible.length&&<div className="p-8 text-center text-sm text-muted-foreground">No members match these filters.</div>}
+        {!data?.rows?.length&&<div className="p-8 text-center text-sm text-muted-foreground">No members match these filters.</div>}
       </div>
       <div className="flex items-center justify-between gap-3 border-t p-4 text-sm text-muted-foreground">
-        <span>{filtered.length} members · Page {Math.min(page,numberOfPages)} of {numberOfPages}</span>
-        <div className="flex gap-2"><Button variant="outline" disabled={page<=1} onClick={()=>setPage(n=>n-1)}>Previous</Button><Button variant="outline" disabled={page>=numberOfPages} onClick={()=>setPage(n=>n+1)}>Next</Button></div>
+        <span>{total.toLocaleString('en-IN')} matching members · Page {page} of {numberOfPages}</span>
+        <div className="flex gap-2"><Button variant="outline" disabled={page<=1||loading} onClick={()=>setPage(n=>Math.max(1,n-1))}>Previous</Button>
+        <Button variant="outline" disabled={page>=numberOfPages||loading} onClick={()=>setPage(n=>n+1)}>Next</Button></div>
       </div>
     </section>}
   </div>;
