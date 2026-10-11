@@ -237,13 +237,14 @@ export default function Settings() {
         <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold">Demo data stored in this browser</p>
-            <p className="text-xs text-muted-foreground">Reset to the original sample members, plans, fees and payments before your next customer presentation.</p>
+            <p className="text-xs text-muted-foreground">Clear the plans, members, receipts, fee cycles, renewals and example team entries you added in this browser. Keep only the showcase Admin login. This cannot be undone.</p>
           </div>
           <Button variant="outline" type="button" onClick={() => {
+            if (!window.confirm('Clear all records created in this browser demo? This cannot be undone. Your live Supabase data will NOT be affected.')) return;
             sdk.demo.reset();
-            toast.success('Sample data restored.');
+            toast.success('Demo workspace cleared.');
             window.location.reload();
-          }}>Reset demo data</Button>
+          }}>Clear demo workspace</Button>
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-3">

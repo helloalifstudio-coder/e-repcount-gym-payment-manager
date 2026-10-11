@@ -31,6 +31,8 @@ export default function Home(){
   const {data:summary}=useFetch(()=>sdk.dashboardSummary(today),[today]);
   const stats={active:0,soon:0,today:0,expired:0,...overview?.stats};
   const attention=overview?.attention??[];
+  const isEmptyGym = !loading && Boolean(overview) &&
+    Number(stats.active||0)+Number(stats.expired||0)+Number(stats.noDate||0)+Number(stats.inactive||0)===0;
   return <div className="space-y-6 pb-5">
     <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div>
@@ -50,6 +52,32 @@ export default function Home(){
       <Metric label="Renewing today" value={loading?'—':stats.today} detail="Contact these members first" icon="Bell" to="/renewals?view=today"/>
       <Metric label="Expired memberships" value={loading?'—':stats.expired} detail="Invite them to renew" icon="AlertTriangle" to="/renewals?view=expired"/>
     </section>
+    {isEmptyGym && <section className="rounded-xl border border-primary/30 bg-card p-5 md:p-7" aria-label="Set up your first gym membership">
+      <p className="text-xs font-bold uppercase tracking-widest text-primary">Start from an empty gym</p>
+      <h2 className="mt-2 font-heading text-2xl font-bold">No members yet — build the workflow step by step</h2>
+      <p className="mt-2 text-sm text-muted-foreground">Start with a membership plan, add your first member and record the upfront fee. RepCount will then calculate the next renewal date.</p>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="rounded-lg border border-border p-4">
+          <p className="text-xs font-bold text-primary">STEP 1</p>
+          <h3 className="mt-2 font-semibold">Create a membership plan</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Choose a name, duration and price.</p>
+          {canCreate&&<Button asChild variant="outline" size="sm" className="mt-3"><Link to="/plans/new">Create first plan</Link></Button>}
+        </div>
+        <div className="rounded-lg border border-border p-4">
+          <p className="text-xs font-bold text-primary">STEP 2</p>
+          <h3 className="mt-2 font-semibold">Enroll your first member</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Add contact details and collect the first payment.</p>
+          {canCreate&&<Button asChild variant="outline" size="sm" className="mt-3"><Link to="/members/new">Add first member</Link></Button>}
+        </div>
+        <div className="rounded-lg border border-border p-4">
+          <p className="text-xs font-bold text-primary">STEP 3</p>
+          <h3 className="mt-2 font-semibold">Track the next renewal</h3>
+          <p className="mt-1 text-sm text-muted-foreground">See the billing date and prepare a reminder.</p>
+          <Button asChild variant="outline" size="sm" className="mt-3"><Link to="/renewals">Open renewals</Link></Button>
+        </div>
+      </div>
+      {sdk.isDemo&&<p className="mt-4 text-xs text-muted-foreground">This showcase stores entries only in your browser. Use example contact details rather than actual customers' private information.</p>}
+    </section>}
     <section className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div><h2 className="font-heading text-lg font-bold">Members needing a reminder</h2>
@@ -57,7 +85,7 @@ export default function Home(){
         <Button asChild variant="outline" size="sm"><Link to="/renewals">View all renewals <ApperIcon name="ArrowRight" size={15} className="ml-2"/></Link></Button>
       </div>
       {loading?<p className="p-6 text-sm text-muted-foreground">Checking upcoming renewals…</p>
-        :!attention.length?<div className="p-8 text-center"><ApperIcon name="CheckCircle2" size={25} className="mx-auto text-success"/><p className="mt-3 font-medium">No imminent renewals</p><p className="mt-1 text-sm text-muted-foreground">Everyone is currently up to date. Check back closer to the next billing date.</p></div>
+        :!attention.length?<div className="p-8 text-center"><ApperIcon name={isEmptyGym?"Users":"CheckCircle2"} size={25} className="mx-auto text-primary"/><p className="mt-3 font-medium">{isEmptyGym?'No memberships to remind yet':'No imminent renewals'}</p><p className="mt-1 text-sm text-muted-foreground">{isEmptyGym?'Add a plan and your first member to start tracking billing dates.':'Everyone is currently up to date. Check back closer to the next billing date.'}</p></div>
         :<div className="divide-y divide-border">{attention.map(m=>{
           const link=reminderUrl(m,m.plan_c,today);
           return <div key={m.Id} className="flex flex-wrap items-center justify-between gap-3 p-4">

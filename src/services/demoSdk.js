@@ -5,7 +5,8 @@ import { nextRenewalDate, parseDay, todayKey, renewalStatus, renewalStats } from
 // All customer-facing sample data is held in this visitor's browser.
 export const DEMO_LOGIN = Object.freeze({ email: 'admin@gmail.com', password: 'admin@123' });
 const SESSION_KEY = 'repcount.demo.session.v1';
-const DATA_KEY = 'repcount.demo.data.v2';
+const DATA_KEY = 'repcount.demo.data.v3';
+const LEGACY_DATA_KEYS = ['repcount.demo.data.v1', 'repcount.demo.data.v2'];
 const DEMO_USER = Object.freeze({
   id: 'demo-admin', Id: 'demo-admin', userId: 'demo-admin',
   gymId: 'demo-gym', profile: 'Admin_c',
@@ -19,46 +20,29 @@ function dateOffset(days) {
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
 }
 function seed() {
-  const plans = [
-    { Id:'plan-basic',Name:'Monthly Fitness',duration_c:'1 month',price_c:1299,description_c:'Gym access and cardio equipment',active_c:true },
-    { Id:'plan-pro',Name:'Quarterly Strength',duration_c:'3 months',price_c:3499,description_c:'Strength training and equipment access',active_c:true },
-    { Id:'plan-premium',Name:'Annual Unlimited',duration_c:'12 months',price_c:11999,description_c:'Full-year gym access',active_c:true },
-  ];
-  const members = [
-    {Id:'member-1',Name:'Arjun Sharma',phone_c:'9876500011',email_c:'arjun@example.com',plan_c:'plan-pro',join_date_c:dateOffset(-90),due_date_c:dateOffset(0),status_c:'Due soon',notes_c:''},
-    {Id:'member-2',Name:'Priya Mehta',phone_c:'9876500022',email_c:'priya@example.com',plan_c:'plan-basic',join_date_c:dateOffset(-60),due_date_c:dateOffset(7),status_c:'Active',notes_c:''},
-    {Id:'member-3',Name:'Rahul Nair',phone_c:'9876500033',email_c:'rahul@example.com',plan_c:'plan-premium',join_date_c:dateOffset(-130),due_date_c:dateOffset(235),status_c:'Active',notes_c:''},
-    {Id:'member-4',Name:'Sneha Patel',phone_c:'9876500044',email_c:'sneha@example.com',plan_c:'plan-basic',join_date_c:dateOffset(-45),due_date_c:dateOffset(-3),status_c:'Overdue',notes_c:''},
-    {Id:'member-5',Name:'Vikram Singh',phone_c:'9876500055',email_c:'vikram@example.com',plan_c:'plan-pro',join_date_c:dateOffset(-30),due_date_c:dateOffset(12),status_c:'Active',notes_c:''},
-  ];
-  // Memberships are normally paid upfront. An expired renewal is NOT an unpaid fee.
-  // Legacy fee-cycle data starts empty; it remains available for exceptional credit cases.
-  const dues = [];
-  const payments = [
-    {Id:'payment-1',Name:'REN-001',member_c:'member-1',due_c:null,amount_c:3499,paid_on_c:dateOffset(-90),method_c:'UPI',status_c:'Paid',notes_c:'Membership renewal: Quarterly Strength'},
-    {Id:'payment-2',Name:'REN-002',member_c:'member-2',due_c:null,amount_c:1299,paid_on_c:dateOffset(-23),method_c:'Cash',status_c:'Paid',notes_c:'Membership renewal: Monthly Fitness'},
-    {Id:'payment-3',Name:'REN-003',member_c:'member-3',due_c:null,amount_c:11999,paid_on_c:dateOffset(-130),method_c:'Card',status_c:'Paid',notes_c:'Membership renewal: Annual Unlimited'},
-    {Id:'payment-4',Name:'REN-004',member_c:'member-5',due_c:null,amount_c:3499,paid_on_c:dateOffset(-78),method_c:'UPI',status_c:'Paid',notes_c:'Membership renewal: Quarterly Strength'},
-  ];
-  const renewals = [
-    {id:'renewal-1',request_id:'seed-1',member_id:'member-1',plan_id:'plan-pro',payment_id:'payment-1',paid_on:dateOffset(-90),started_on:dateOffset(-90),next_renewal_on:dateOffset(0),amount:3499,created_at:dateOffset(-90)},
-    {id:'renewal-2',request_id:'seed-2',member_id:'member-2',plan_id:'plan-basic',payment_id:'payment-2',paid_on:dateOffset(-23),started_on:dateOffset(-23),next_renewal_on:dateOffset(7),amount:1299,created_at:dateOffset(-23)},
-    {id:'renewal-3',request_id:'seed-3',member_id:'member-3',plan_id:'plan-premium',payment_id:'payment-3',paid_on:dateOffset(-130),started_on:dateOffset(-130),next_renewal_on:dateOffset(235),amount:11999,created_at:dateOffset(-130)},
-    {id:'renewal-4',request_id:'seed-4',member_id:'member-5',plan_id:'plan-pro',payment_id:'payment-4',paid_on:dateOffset(-78),started_on:dateOffset(-78),next_renewal_on:dateOffset(12),amount:3499,created_at:dateOffset(-78)},
-  ];
+  // A clean customer walkthrough must start with no fictitious gym data.
+  // Only the demonstration Admin identity exists so you can sign in and
+  // create the first plan, member, payment and renewal during the presentation.
   return {
-    plans_c:plans, gym_members_c:members, membership_dues_c:dues, payments_c:payments, renewals,
-    users:[
-      {id:'demo-admin',userId:'demo-admin',name:'Demo Administrator',email:DEMO_LOGIN.email,profile:{name:'Admin_c'},status:'active',createdOn:dateOffset(-90)},
-      {id:'demo-manager',userId:'demo-manager',name:'Neha Manager',email:'neha.demo@example.com',profile:{name:'Manager_c'},status:'active',createdOn:dateOffset(-45)},
-      {id:'demo-staff',userId:'demo-staff',name:'Karan Staff',email:'karan.demo@example.com',profile:{name:'Staff_c'},status:'active',createdOn:dateOffset(-20)},
-    ],
+    plans_c: [],
+    gym_members_c: [],
+    membership_dues_c: [],
+    payments_c: [],
+    renewals: [],
+    users: [{
+      id:'demo-admin', userId:'demo-admin', name:'Demo Administrator',
+      email:DEMO_LOGIN.email, profile:{name:'Admin_c'},
+      status:'active', createdOn:dateOffset(0),
+    }],
   };
 }
 let fallback = null;
 function load() {
   if (fallback) return fallback;
   try {
+    // One-time version change: old starter examples must not reappear in
+    // browsers that have already visited previous demo deployments.
+    for (const key of LEGACY_DATA_KEYS) localStorage.removeItem(key);
     const raw = localStorage.getItem(DATA_KEY);
     if(raw) {
       const data = JSON.parse(raw);

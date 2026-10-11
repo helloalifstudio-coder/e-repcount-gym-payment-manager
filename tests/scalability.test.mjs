@@ -19,14 +19,16 @@ test('10,000 sample members remain queryable at first, last and filtered pages w
     const id='perf-'+String(i).padStart(5,'0');
     db.gym_members_c.push({Id:id,Name:'Member '+String(i).padStart(5,'0'),
       phone_c:'987'+String(i).padStart(7,'0'),
-      email_c:'',due_date_c:future,status_c:'Active',plan_c:'plan-basic'});
+      email_c:'',due_date_c:future,status_c:'Active',plan_c:null});
   }
   const first=await sdk.directory.list({page:1,pageSize:25});
-  const last=await sdk.directory.list({page:401,pageSize:25});
-  assert.equal(first.total,10005);
+  const last=await sdk.directory.list({page:400,pageSize:25});
+  const beyondLast=await sdk.directory.list({page:401,pageSize:25});
+  assert.equal(first.total,10000);
   assert.equal(first.rows.length,25);
-  assert.equal(last.rows.length,5);
+  assert.equal(last.rows.length,25);
   assert.equal(last.hasMore,false);
+  assert.equal(beyondLast.rows.length,0);
   const searched=await sdk.directory.search('Member 09999');
   assert.equal(searched.total,1);
   assert.equal(searched.rows[0].Name,'Member 09999');
