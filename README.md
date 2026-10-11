@@ -124,3 +124,36 @@ The login UI in this version restores the `Welcome back` form and round dumbbell
 Password recovery: the public `/forgot-password` page calls `supabase.auth.resetPasswordForEmail`. The `/reset-password` route consumes the authenticated recovery session using the configured PKCE flow and updates the password with `supabase.auth.updateUser`; the app signs out afterward. Configure Supabase **Authentication → URL Configuration** to allow the exact production redirect:
 `https://e-repcount-gym-payment-manager-three.vercel.app/reset-password`.
 If you use any other verified production domain, allowlist that domain's exact reset URL as well. On a browser, test the entire reset-email link and new-password sign-in flow with an authorized mailbox; source/build checks alone cannot verify email delivery, redirect policy, or actual credentials. Avoid giving the preview deployment access to the production database just for visual QA.
+
+
+## Connection and data-access audit (2026-10-11)
+
+Production frontend `https://e-repcount-gym-payment-manager-three.vercel.app`
+is compiled against Supabase project `mnflpbdtfvksbxjdsvdf`.
+The Vercel Production `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` values have been verified against that project.
+The `secure-login` Edge Function is deployed and is reaching Supabase Auth.
+
+The database's broad original table grants were corrected with
+`20261011093000_restrict_public_table_grants.sql`: no anonymous table read/write
+or TRUNCATE is granted; authenticated users have read-only access to workspace
+metadata and RLS-limited CRUD access to business tables. Service-role access,
+private login-throttling functions, and storage permissions are unchanged.
+
+A transaction-scoped functional test using a simulated active Admin JWT
+successfully created a plan, member, due, and paid payment and verified
+the due's paid/balance reconciliation. All test changes were rolled back.
+
+**Login failures:** A functioning API connection does not imply that the entered
+password matches a Supabase Auth account. The old Apper/MemoryAdapter seed
+credentials were not migrated into Supabase. To regain access, the account
+owner must use a real authorized email, the original Supabase Auth password,
+or the app's password-recovery flow. Production Supabase Auth settings must
+allowlist the exact `/reset-password` redirect URL. The server controls
+rate-limit lockouts; the browser no longer blocks attempts using cached
+localStorage lock timestamps. Never reset another person's account or bypass
+lockouts to simulate a successful login.
+
+Outstanding production checks: complete password recovery with a controlled
+email address, confirm real successful sign-in and navigation in a browser,
+verify live file uploads, and enable Auth leaked-password protection.
