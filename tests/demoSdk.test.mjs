@@ -1,76 +1,105 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDemoSdk, DEMO_LOGIN } from '../src/services/demoSdk.js';
+import { todayKey, addCalendarMonths, planMonths, nextRenewalDate, renewalStatus, renewalStats, reminderUrl } from '../src/services/renewalLogic.js';
 
-function store() {
-  const data = new Map();
-  return { getItem:k=>data.has(k)?data.get(k):null, setItem:(k,v)=>data.set(k,String(v)), removeItem:k=>data.delete(k), clear:()=>data.clear() };
-}
-globalThis.localStorage = store();
-globalThis.sessionStorage = store();
-const sdk = createDemoSdk();
+const storage = () => {
+  const values=new Map();
+  return {getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)};
+};
+globalThis.localStorage=storage();
+globalThis.sessionStorage=storage();
+const sdk=createDemoSdk();
 
-test('demo credentials cannot authenticate a different email or password', async()=>{
-  assert.equal((await sdk.session.login({email:'other@example.com',password:DEMO_LOGIN.password})).ok,false);
+test('calendar-month renewals handle month ends and leap years',()=>{
+  assert.equal(addCalendarMonths('2024-01-31',1),'2024-02-29');
+  assert.equal(addCalendarMonths('2025-01-31',1),'2025-02-28');
+  assert.equal(addCalendarMonths('2026-08-31',1),'2026-09-30');
+  assert.equal(planMonths('3 months'),3);
+  assert.equal(nextRenewalDate({currentRenewalDate:'2026-11-01',paidOn:'2026-10-11',duration:'1 month'}).next,'2026-12-01');
+  assert.equal(nextRenewalDate({currentRenewalDate:'2026-09-01',paidOn:'2026-10-11',duration:'3 months'}).next,'2027-01-11');
+  assert.throws(()=>addCalendarMonths('2026-02-30',1));
+});
+test('renewal status is based on actual calendar dates, never outstanding fees',()=>{
+  const now='2026-10-11';
+  assert.equal(renewalStatus({due_date_c:'2026-10-10'},now),'expired');
+  assert.equal(renewalStatus({due_date_c:'2026-10-11'},now),'today');
+  assert.equal(renewalStatus({due_date_c:'2026-10-18'},now),'soon');
+  assert.equal(renewalStatus({due_date_c:'2026-10-19'},now),'active');
+  assert.equal(renewalStatus({status_c:'Inactive',due_date_c:'2026-10-11'},now),'inactive');
+  assert.equal(renewalStats([{due_date_c:now},{due_date_c:'2026-10-14'}],now).soon,2);
+  const url=reminderUrl({Name:'Rahul',phone_c:'9876500011',due_date_c:'2026-11-01'},{price_c:1200},now);
+  assert.ok(url.startsWith('https://wa.me/919876500011?text='));
+  assert.match(decodeURIComponent(url),/renewal fee is ₹1,200/);
+  assert.equal(reminderUrl({Name:'No Phone',phone_c:'',due_date_c:now},null,now),null);
+});
+
+test('demo sign-in is isolated from Supabase and only accepts public sample credentials',async()=>{
   assert.equal((await sdk.session.login({email:DEMO_LOGIN.email,password:'wrong'})).ok,false);
-  assert.equal(await sdk.session.getUser(),null);
+  assert.equal((await sdk.session.login({email:'other@example.com',password:DEMO_LOGIN.password})).ok,false);
   assert.equal((await sdk.session.login({...DEMO_LOGIN})).ok,true);
   assert.equal((await sdk.session.getUser()).profile,'Admin_c');
 });
 
-test('sample plans, members, linked dues and dashboard summary load without Supabase',async()=>{
-  const plans=await sdk.table('plans_c').page(1,10).fetch();
-  assert.equal(plans.success,true);
-  assert.equal(plans.total,3);
+test('demo starts with upfront payments and no artificial debts',async()=>{
+  const plans=await sdk.table('plans_c').fetch();
   const dues=await sdk.table('membership_dues_c').fetch();
-  assert.equal(dues.total,4);
-  assert.equal(dues.data[0].member_c.Name,'Arjun Sharma');
-  assert.equal(dues.data[0].plan_c.Name,'Quarterly Strength');
-  const now = new Date();
-  const today = [now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
-  const summary=await sdk.dashboardSummary(today);
-  assert.equal(summary.outstanding,6797);
-  assert.equal(summary.collectedToday,1799);
+  const payments=await sdk.table('payments_c').fetch();
+  const members=await sdk.table('gym_members_c').fetch();
+  assert.equal(plans.total,3);
+  assert.equal(dues.total,0);
+  assert.equal(payments.total,4);
+  assert.equal(members.total,5);
+  assert.equal((await sdk.dashboardSummary(todayKey())).outstanding,0);
+  assert.equal((await sdk.renewals.list()).length,4);
+  assert.equal(renewalStats(members.data).expired,1);
 });
 
-test('all demo CRUD operations and payment reconciliation remain browser-local',async()=>{
-  const plan=await sdk.table('plans_c').create({Name:'Test plan',price_c:500,duration_c:'1 month'});
+test('early renewal records full payment, advances expiry, and deduplicates retries',async()=>{
+  const before=(await sdk.table('payments_c').fetch()).total;
+  const member=(await sdk.table('gym_members_c').get('member-2')).data;
+  const expected=nextRenewalDate({currentRenewalDate:member.due_date_c,paidOn:todayKey(),duration:'1 month'}).next;
+  const args={memberId:'member-2',planId:'plan-basic',paidOn:todayKey(),method:'UPI',requestId:'test-renewal-early'};
+  const first=await sdk.renewals.record(args);
+  const second=await sdk.renewals.record(args);
+  assert.equal(first.nextRenewalDate,expected);
+  assert.equal(second.alreadyRecorded,true);
+  assert.equal((await sdk.table('payments_c').fetch()).total,before+1);
+  assert.equal((await sdk.table('gym_members_c').get('member-2')).data.due_date_c,expected);
+});
+
+test('creating a new member and recording upfront renewal activates membership',async()=>{
+  const plan=await sdk.table('plans_c').create({Name:'Test plan',price_c:500,active_c:true,duration_c:'1 month'});
   assert.equal(plan.success,true);
-  const member=await sdk.table('gym_members_c').create({Name:'Test Member',phone_c:'9999999999',status_c:'Active',plan_c:plan.data[0].Id});
+  const member=await sdk.table('gym_members_c').create({Name:'Trial',phone_c:'9999999999',plan_c:plan.data[0].Id,due_date_c:todayKey(),status_c:'Active'});
   assert.equal(member.success,true);
-  const due=await sdk.table('membership_dues_c').create({Name:'TEST-FEE',member_c:member.data[0].Id,plan_c:plan.data[0].Id,due_date_c:'2026-10-12',amount_due_c:500});
-  assert.equal(due.success,true);
-  const pay=await sdk.table('payments_c').create({Name:'TEST-PAY',member_c:member.data[0].Id,due_c:due.data[0].Id,amount_c:200,status_c:'Paid',method_c:'UPI'});
-  assert.equal(pay.success,true);
-  let updated=await sdk.table('membership_dues_c').get(due.data[0].Id);
-  assert.equal(updated.data.amount_paid_c,200);
-  assert.equal(updated.data.balance_c,300);
-  assert.equal(updated.data.status_c,'Partially paid');
-  assert.equal((await sdk.table('payments_c').create({Name:'OVERPAY',member_c:member.data[0].Id,due_c:due.data[0].Id,amount_c:1000,status_c:'Paid'})).success,false);
-  assert.equal((await sdk.table('payments_c').remove(pay.data[0].Id)).success,true);
-  updated=await sdk.table('membership_dues_c').get(due.data[0].Id);
-  assert.equal(updated.data.balance_c,500);
-  assert.equal(updated.data.status_c,'Unpaid');
-  assert.equal((await sdk.table('membership_dues_c').remove(due.data[0].Id)).success,true);
-  assert.equal((await sdk.table('gym_members_c').remove(member.data[0].Id)).success,true);
-  assert.equal((await sdk.table('plans_c').remove(plan.data[0].Id)).success,true);
+  const paid=await sdk.renewals.record({memberId:member.data[0].Id,planId:plan.data[0].Id,paidOn:todayKey(),method:'Cash',requestId:'test-new-member'});
+  assert.equal(paid.nextRenewalDate,addCalendarMonths(todayKey(),1));
+  assert.equal((await sdk.table('gym_members_c').get(member.data[0].Id)).data.due_date_c,paid.nextRenewalDate);
+  assert.equal((await sdk.renewals.list()).some(r=>r.member_id===member.data[0].Id),true);
 });
-
-test('demo team entries do not become authentication credentials',async()=>{
-  const staff=await sdk.teams.createMember({email:'mock.staff@example.com',firstName:'Mock',lastName:'Staff',profileName:'Staff_c',password:'not-saved'});
-  assert.equal(staff.profile.name,'Staff_c');
-  const all=await sdk.teams.getMembers(0,100);
-  assert.ok(all.data.some(u=>u.email==='mock.staff@example.com'));
-  assert.equal((await sdk.session.login({email:'mock.staff@example.com',password:'not-saved'})).ok,false);
+test('legacy exceptional unpaid fee-cycle accounting still works',async()=>{
+  const member=await sdk.table('gym_members_c').get('member-1');
+  const due=await sdk.table('membership_dues_c').create({Name:'Exceptional deferred fee',member_c:member.data.Id,amount_due_c:500,due_date_c:todayKey()});
+  assert.equal(due.success,true);
+  const payment=await sdk.table('payments_c').create({Name:'Partial late payment',member_c:member.data.Id,due_c:due.data[0].Id,amount_c:200,status_c:'Paid'});
+  assert.equal(payment.success,true);
+  const updated=await sdk.table('membership_dues_c').get(due.data[0].Id);
+  assert.equal(updated.data.balance_c,300);
+  assert.equal((await sdk.table('payments_c').create({Name:'Overpay',member_c:member.data.Id,due_c:due.data[0].Id,amount_c:400,status_c:'Paid'})).success,false);
+  assert.equal((await sdk.table('payments_c').remove(payment.data[0].Id)).success,true);
+  assert.equal((await sdk.table('membership_dues_c').remove(due.data[0].Id)).success,true);
+});
+test('fictional demo team entries cannot sign in',async()=>{
+  const staff=await sdk.teams.createMember({email:'fake@example.com',profileName:'Staff_c'});
+  assert.equal((await sdk.session.login({email:'fake@example.com',password:'fake'})).ok,false);
   await sdk.teams.deleteMember(staff.id);
 });
-
-test('logout and demo reset do not access real auth or data',async()=>{
+test('reset restores clean showcase and logout removes demo access',async()=>{
+  sdk.demo.reset();
+  assert.equal((await sdk.table('membership_dues_c').fetch()).total,0);
+  assert.equal((await sdk.table('payments_c').fetch()).total,4);
   await sdk.session.logout();
   assert.equal(await sdk.session.getUser(),null);
   assert.equal((await sdk.table('plans_c').fetch()).success,false);
-  await sdk.session.login({...DEMO_LOGIN});
-  sdk.demo.reset();
-  const plans=await sdk.table('plans_c').fetch();
-  assert.equal(plans.total,3);
 });
