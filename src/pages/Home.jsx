@@ -1,253 +1,87 @@
 import { Link } from 'react-router-dom';
 import { useFetch } from '@/hooks/useFetch';
 import { sdk } from '@/services/sdk';
+import { renewalStatus, renewalStats, reminderUrl, todayKey } from '@/services/renewalLogic';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import ApperIcon from '@/components/ApperIcon';
 import { useProfile } from '@/hooks/useProfile';
 import { getTableAccess } from '@/services/userPermissions';
 
-export const route = {
-  path: '/',
-  layout: 'owner',
-  access: "profile === 'Admin_c' || profile === 'Manager_c' || profile === 'Staff_c'",
-};
-export const nav = { label: 'Overview', icon: 'LayoutDashboard', order: 0 };
-
-const { and, eq, gt, ne } = window.RepCountSDK.CoreSDK;
-
-const money = value => new Intl.NumberFormat('en-IN', {
-  style: 'currency',
-  currency: 'INR',
-  maximumFractionDigits: 0,
-}).format(Number(value || 0));
-
-const dateKey = date => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-async function fetchAllTodayDues(today) {
-  const records = [];
-  let page = 1;
-  let total = 0;
-  while (true) {
-    const result = await sdk.table('membership_dues_c')
-      .select(['Id', 'Name', 'member_c', { field: 'member_c', ref: 'phone_c' }, 'due_date_c', 'balance_c', 'status_c'])
-      .where(and(eq('due_date_c', today), gt('balance_c', 0), ne('status_c', 'Waived')))
-      .orderBy('due_date_c')
-      .page(page, 100)
-      .fetch();
-    if (!result.success) throw new Error(result.message || 'Could not load dues for today.');
-    records.push(...result.data);
-    total = result.total ?? records.length;
-    if (!result.hasMore) return { rows: records, total };
-    page += 1;
+export const route={path:'/',layout:'owner',access:"profile === 'Admin_c' || profile === 'Manager_c' || profile === 'Staff_c'"};
+export const nav={label:'Overview',icon:'LayoutDashboard',order:0};
+const today=todayKey();
+const money=n=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(n||0));
+async function allMembers(){
+  const members=[];
+  for(let page=1;page<=100;page++){
+    const r=await sdk.table('gym_members_c')
+      .select(['Id','Name','phone_c','plan_c','due_date_c','status_c'])
+      .page(page,100).fetch();
+    if(!r.success)throw new Error(r.message||'Could not load members');
+    members.push(...r.data);
+    if(!r.hasMore)return members;
   }
+  throw new Error('Membership directory exceeded the supported page limit.');
 }
+const Metric=({label,value,detail,icon,to})=><Link to={to} className="block rounded-lg border border-border bg-card p-4 transition hover:border-primary/40 hover:shadow-sm">
+  <ApperIcon name={icon} size={20} className="text-primary"/>
+  <p className="mt-3 font-heading text-3xl font-bold">{value}</p>
+  <p className="mt-1 text-sm font-medium">{label}</p>
+  <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+</Link>;
 
-function MetricCard({ to, label, value, detail, icon, tone = 'neutral', loading = false }) {
-  const toneClass = tone === 'danger'
-    ? 'bg-destructive/10 text-destructive'
-    : tone === 'success'
-      ? 'bg-success-muted text-success'
-      : 'bg-secondary text-secondary-foreground';
-
-  return (
-    <Link
-      to={to}
-      className="group block min-h-36 rounded-xl border border-border bg-card p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      aria-label={`${label}. ${loading ? 'Loading' : value}. ${detail}. Open details`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <span className={`rounded-lg p-2 ${toneClass}`}>
-          <ApperIcon name={icon} size={19} />
-        </span>
+export default function Home(){
+  const {profile}=useProfile();
+  const {canCreate}=getTableAccess(profile,'gym_members_c');
+  const {data:members,loading,error,run}=useFetch(allMembers,[]);
+  const {data:summary}=useFetch(()=>sdk.dashboardSummary(today),[today]);
+  const records=members??[];
+  const stats=renewalStats(records,today);
+  const attention=records.filter(m=>['expired','today','soon'].includes(renewalStatus(m,today)))
+    .sort((a,b)=>String(a.due_date_c).localeCompare(String(b.due_date_c))).slice(0,8);
+  return <div className="space-y-6 pb-5">
+    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-primary">Membership retention</p>
+        <h1 className="mt-2 font-heading text-3xl font-bold">Renewals overview</h1>
+        <p className="mt-2 text-sm text-muted-foreground">See who's renewing next and remind them before their gym membership expires.</p>
       </div>
-      {loading
-        ? <Skeleton className="mt-4 h-9 w-32" />
-        : <p className="mt-3 font-heading text-3xl font-bold tracking-tight">{value}</p>}
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">{detail}</p>
-        <ApperIcon name="ArrowUpRight" size={16} className="shrink-0 text-muted-foreground transition group-hover:text-primary" />
+      <div className="flex flex-wrap gap-2">
+        {canCreate&&<Button asChild variant="outline"><Link to="/members/new"><ApperIcon name="UserPlus" size={16} className="mr-2"/>Add member</Link></Button>}
+        <Button asChild><Link to="/renewals"><ApperIcon name="CalendarClock" size={16} className="mr-2"/>Manage renewals</Link></Button>
       </div>
-    </Link>
-  );
-}
-
-export default function Home() {
-  const { profile } = useProfile();
-  const { canCreate: canCreateMember } = getTableAccess(profile, 'gym_members_c');
-  const { canCreate: canCreatePayment } = getTableAccess(profile, 'payments_c');
-
-  const now = new Date();
-  const today = dateKey(now);
-  const dateLabel = now.toLocaleDateString('en-IN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-
-  const {
-    data: summary,
-    loading: summaryLoading,
-    error: summaryError,
-    run: reloadSummary,
-  } = useFetch(() => sdk.dashboardSummary(today), [today]);
-
-  const {
-    data: dueTodayData,
-    loading: dueTodayLoading,
-    error: dueTodayError,
-    run: reloadDueToday,
-  } = useFetch(() => fetchAllTodayDues(today), [today]);
-
-  const todayRows = dueTodayData?.rows ?? [];
-  const dueTodayMembers = Object.values(todayRows.reduce((groups, row) => {
-    const memberId = row.member_c?.Id || `unlinked-${row.Id}`;
-    if (!groups[memberId]) {
-      groups[memberId] = {
-        id: row.member_c?.Id,
-        key: memberId,
-        name: row.member_c?.Name || 'Member',
-        phone: row.member_c?.phone_c || '',
-        balance: 0,
-        dueIds: [],
-      };
-    }
-    groups[memberId].balance += Number(row.balance_c || 0);
-    groups[memberId].dueIds.push(row.Id);
-    return groups;
-  }, {})).sort((a, b) => a.name.localeCompare(b.name));
-
-  return (
-    <div className="space-y-6 pb-4">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Gym owner workspace</p>
-          <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight md:text-3xl">Collections overview</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{dateLabel}. Here is today's collection at a glance.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex">
-          {canCreateMember && (
-            <Button asChild variant="outline" className="min-h-11">
-              <Link to="/members/new"><ApperIcon name="UserPlus" size={16} className="mr-2" />Add member</Link>
-            </Button>
-          )}
-          {canCreatePayment && (
-            <Button asChild className="min-h-11">
-              <Link to="/payments/new"><ApperIcon name="Plus" size={16} className="mr-2" />Record payment</Link>
-            </Button>
-          )}
-        </div>
-      </header>
-
-      <section className="grid gap-3 md:grid-cols-3" aria-label="Today's collection summary">
-        <MetricCard
-          to="/dues?view=all"
-          label="Outstanding fees"
-          value={money(summary?.outstanding)}
-          detail="Review pending collections"
-          icon="Wallet"
-          loading={summaryLoading}
-        />
-        <MetricCard
-          to="/payments?period=today"
-          label="Collected today"
-          value={money(summary?.collectedToday)}
-          detail="View today's payments"
-          icon="CircleCheck"
-          tone="success"
-          loading={summaryLoading}
-        />
-        <MetricCard
-          to="/dues?view=today"
-          label="Members due today"
-          value={dueTodayLoading ? '—' : dueTodayMembers.length}
-          detail={`${money(summary?.dueTodayBalance)} to collect today`}
-          icon="CalendarCheck"
-          tone="danger"
-          loading={summaryLoading || dueTodayLoading}
-        />
-      </section>
-
-      {summaryError && (
-        <section role="alert" className="flex flex-col justify-between gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center">
-          <p className="text-sm text-muted-foreground">Dashboard summary could not be loaded. {summaryError.message}</p>
-          <Button variant="outline" onClick={reloadSummary}>Retry summary</Button>
-        </section>
-      )}
-
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex flex-col justify-between gap-3 border-b border-border p-4 sm:flex-row sm:items-center md:p-5">
-          <div>
-            <h2 className="font-heading text-lg font-bold">Due today</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {dueTodayLoading ? 'Checking unpaid balances…' : `${dueTodayMembers.length} members with unpaid fees due today`}
-            </p>
-          </div>
-          <Button asChild variant="outline" className="min-h-10">
-            <Link to="/dues?view=today">View all due today <ApperIcon name="ArrowRight" size={15} className="ml-2" /></Link>
-          </Button>
-        </div>
-
-        {dueTodayLoading ? (
-          <div className="space-y-3 p-4" aria-label="Loading dues">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : dueTodayError ? (
-          <div role="alert" className="p-5">
-            <p className="text-sm font-medium">Today's dues could not be loaded.</p>
-            <p className="mt-1 text-sm text-muted-foreground">{dueTodayError.message}</p>
-            <Button variant="outline" className="mt-3" onClick={reloadDueToday}>Try again</Button>
-          </div>
-        ) : dueTodayMembers.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-success-muted text-success">
-              <ApperIcon name="CheckCircle2" size={22} />
-            </span>
-            <h3 className="mt-3 font-semibold">All clear for today</h3>
-            <p className="mt-1 text-sm text-muted-foreground">There are no unpaid membership fees due today.</p>
-            <Button asChild variant="outline" className="mt-4">
-              <Link to="/dues?view=all">Review all outstanding fees</Link>
-            </Button>
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {dueTodayMembers.slice(0, 5).map(member => (
-              <article key={member.key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
-                    {member.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-semibold">{member.name}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{member.phone || 'No phone number'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <p className="font-heading text-base font-bold tabular-nums">{money(member.balance)}</p>
-                  <Button asChild variant="outline" size="sm" className="min-h-10">
-                    <Link to={member.id ? `/members/${member.id}` : `/dues/${member.dueIds[0]}`}>Review</Link>
-                  </Button>
-                </div>
-              </article>
-            ))}
-            {dueTodayMembers.length > 5 && (
-              <div className="border-t border-border bg-muted/20 px-4 py-3 text-center">
-                <Button asChild variant="link" className="min-h-10">
-                  <Link to="/dues?view=today">View all {dueTodayMembers.length} members due today</Link>
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-    </div>
-  );
+    </header>
+    {error&&<div role="alert" className="rounded-lg border border-destructive/30 p-4 text-sm">Could not load renewal dates: {error.message}<Button variant="outline" className="ml-3" onClick={run}>Retry</Button></div>}
+    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Membership renewal totals">
+      <Metric label="Active memberships" value={loading?'—':stats.active} detail="Paid and currently valid" icon="Users" to="/members"/>
+      <Metric label="Renewals next 7 days" value={loading?'—':stats.soon} detail="Including today's renewals" icon="CalendarClock" to="/renewals?view=soon"/>
+      <Metric label="Renewing today" value={loading?'—':stats.today} detail="Contact these members first" icon="Bell" to="/renewals?view=today"/>
+      <Metric label="Expired memberships" value={loading?'—':stats.expired} detail="Invite them to renew" icon="AlertTriangle" to="/renewals?view=expired"/>
+    </section>
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+        <div><h2 className="font-heading text-lg font-bold">Members needing a reminder</h2>
+          <p className="text-sm text-muted-foreground">Memberships expiring within a week or already expired</p></div>
+        <Button asChild variant="outline" size="sm"><Link to="/renewals">View all renewals <ApperIcon name="ArrowRight" size={15} className="ml-2"/></Link></Button>
+      </div>
+      {loading?<p className="p-6 text-sm text-muted-foreground">Checking upcoming renewals…</p>
+        :!attention.length?<div className="p-8 text-center"><ApperIcon name="CheckCircle2" size={25} className="mx-auto text-success"/><p className="mt-3 font-medium">No imminent renewals</p><p className="mt-1 text-sm text-muted-foreground">Everyone is currently up to date. Check back closer to the next billing date.</p></div>
+        :<div className="divide-y divide-border">{attention.map(m=>{
+          const link=reminderUrl(m,m.plan_c,today);
+          return <div key={m.Id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div><Link to={'/members/'+m.Id} className="font-semibold hover:underline">{m.Name}</Link>
+              <p className="mt-1 text-xs text-muted-foreground">Next renewal: {m.due_date_c} · {m.plan_c?.Name||'No plan'}</p></div>
+            <div className="flex gap-2">
+              {link&&<Button asChild variant="outline" size="sm"><a href={link} target="_blank" rel="noopener noreferrer"><ApperIcon name="MessageCircle" size={16} className="mr-1"/>Remind</a></Button>}
+              <Button asChild size="sm"><Link to={'/renewals?view='+ (renewalStatus(m,today)==='expired'?'expired':'soon')}>Renew</Link></Button>
+            </div>
+          </div>;
+        })}</div>}
+    </section>
+    <section className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div><p className="font-semibold">Payments are recorded upfront</p>
+        <p className="mt-1 text-sm text-muted-foreground">After collecting a renewal payment, use Record renewal to advance the next billing date. Old credit balances remain under Dues.</p></div>
+      <div className="text-right"><p className="text-xs text-muted-foreground">Payments collected today</p><p className="font-heading text-xl font-bold">{summary?money(summary.collectedToday):'—'}</p></div>
+    </section>
+  </div>;
 }
