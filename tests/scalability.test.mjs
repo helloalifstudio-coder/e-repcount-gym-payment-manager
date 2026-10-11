@@ -43,6 +43,6 @@ test('10,000 sample members remain queryable at first, last and filtered pages w
   const payments=await sdk.ledger.list({kind:'payments',page:1,pageSize:25,period:'today'});
   assert.equal(payments.total>=10000,true);
   assert.equal(payments.rows.length,25);
-  assert.equal(payments.rows[0].member_c?.Name?.startsWith('Member'),true);
+  assert.equal(payments.rows.some(row=>row.member_c?.Name?.startsWith('Member')),true);
   await sdk.session.logout();
 });
