@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { sdk } from '@/services/sdk';
 import { setUser } from '@/store/userSlice';
@@ -49,36 +49,60 @@ export default function AuthPage() {
   }
 
   return (
-    <AuthLayout title="Sign in to RepCount" description="Secure access to your gym workspace.">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5" aria-label="RepCount sign-in form">
+    <AuthLayout title="Welcome back" description="Sign in to manage members, membership plans and collections." icon="Dumbbell">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email address</Label>
-          <Input id="email" name="email" type="email" inputMode="email" autoComplete="username"
-            placeholder="you@gym.com" value={email} onChange={(event) => setEmail(event.target.value)}
-            required maxLength={254} disabled={loading} autoFocus />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            inputMode="email"
+            maxLength={254}
+            disabled={loading}
+            placeholder="you@gym.com"
+            value={email}
+            onChange={event => setEmail(event.target.value)}
+            required
+            autoFocus
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Forgot password?</Link>
+          </div>
           <div className="relative">
-            <Input id="password" name="password" type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password" value={password}
-              onChange={(event) => setPassword(event.target.value)} required maxLength={1024}
-              disabled={loading} className="pr-11" />
-            <button type="button" onClick={() => setShowPassword((visible) => !visible)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              maxLength={1024}
               disabled={loading}
-              className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              required
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(value => !value)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              disabled={loading}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+            >
               <ApperIcon name={showPassword ? 'EyeOff' : 'Eye'} size={16} />
             </button>
           </div>
         </div>
-        {error && <p role="alert" aria-live="polite"
-          className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" aria-live="polite" className="text-sm text-destructive">{error}</p>}
         <Button type="submit" disabled={loading || !email.trim() || !password} className="mt-1 w-full">
-          {loading ? 'Verifying securely…' : 'Sign in'}
+          {loading ? 'Signing in…' : 'Sign in'}
         </Button>
         <p className="text-center text-xs leading-5 text-muted-foreground">
-          Access is managed by your RepCount administrator. Three failed attempts lock this browser for 24 hours.
+          Need access? Ask your gym's administrator to create your account.
         </p>
       </form>
     </AuthLayout>

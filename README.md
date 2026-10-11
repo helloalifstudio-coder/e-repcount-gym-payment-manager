@@ -8,7 +8,7 @@ This version removes the Apper SDK runtime and uses Supabase Auth, PostgreSQL, S
 
 **Active Supabase project:** `mnflpbdtfvksbxjdsvdf` (gym). On 2026-10-10, the missing six schema/security migrations were successfully applied, along with the one-time first-Admin bootstrap and reconciliation of constraints/internal helper privileges. The seven business tables now have 19 application RLS policies, and the `admin-users` and `secure-login` functions are deployed. An existing confirmed Auth account was assigned the first Admin role in a `RepCount Gym` workspace. Older-project data was **not** transferred. Vercel's production `VITE_SUPABASE_URL` and publishable key were verified to match this project. Live sign-in using the account's password still requires browser-level verification.
 
-The old MemoryAdapter seed data and demo login seed are removed. Only `/login` is intended as a public sign-in page.
+The old MemoryAdapter seed data and demo login seed are removed. `/login`, `/forgot-password`, and `/reset-password` are public authentication routes. All gym data and workspace pages remain protected.
 
 ## Architecture
 
@@ -116,3 +116,11 @@ The simplified home screen shows only three headline metrics: outstanding fees, 
 - Onboarding: sign in using the existing confirmed Supabase Auth account and its original password. Do not share credentials or run the first-Admin bootstrap again. If the password is unknown, use Supabase Dashboard → Authentication → Users to initiate a secure reset for the authorized account.
 - Security follow-up: enable Auth leaked-password protection in the Supabase dashboard. Verify public sign-ups are disabled and limit Vercel environment credentials to those required for this frontend-only project.
 - Automated database role simulation confirmed the Admin sees its own workspace and the anonymous role sees no gym/profile/member rows. A real browser login, password reset, and cross-gym access test were not performed.
+
+## Original login interface restoration (2026-10-11)
+
+The login UI in this version restores the `Welcome back` form and round dumbbell icon from upstream commit `6fed8fdd86ecd35642ee9a95876dd6421e3d493d`, prior to the upstream single-login visual redesign. The existing secure Supabase `secure-login` flow, per-gym permissions, and DB policies are retained. No demo credentials are restored.
+
+Password recovery: the public `/forgot-password` page calls `supabase.auth.resetPasswordForEmail`. The `/reset-password` route consumes the authenticated recovery session using the configured PKCE flow and updates the password with `supabase.auth.updateUser`; the app signs out afterward. Configure Supabase **Authentication → URL Configuration** to allow the exact production redirect:
+`https://e-repcount-gym-payment-manager-three.vercel.app/reset-password`.
+If you use any other verified production domain, allowlist that domain's exact reset URL as well. On a browser, test the entire reset-email link and new-password sign-in flow with an authorized mailbox; source/build checks alone cannot verify email delivery, redirect policy, or actual credentials. Avoid giving the preview deployment access to the production database just for visual QA.

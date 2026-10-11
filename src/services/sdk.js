@@ -73,27 +73,7 @@ function requireSupabase() {
   return supabase;
 }
 
-const LOGIN_BROWSER_ID_KEY = 'repcount.login-browser-id.v1';
 const LOGIN_LOCK_UNTIL_KEY = 'repcount.login-lock-until.v1';
-let fallbackBrowserId = null;
-
-function getLoginBrowserId() {
-  try {
-    const stored = window.localStorage.getItem(LOGIN_BROWSER_ID_KEY);
-    if (stored && /^[A-Za-z0-9_-]{24,100}$/.test(stored)) return stored;
-  } catch { /* server-side limits remain authoritative */ }
-  if (!fallbackBrowserId) {
-    const bytes = new Uint8Array(24);
-    if (globalThis.crypto?.getRandomValues) {
-      globalThis.crypto.getRandomValues(bytes);
-      fallbackBrowserId = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    } else {
-      fallbackBrowserId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-    }
-  }
-  try { window.localStorage.setItem(LOGIN_BROWSER_ID_KEY, fallbackBrowserId); } catch { /* continue */ }
-  return fallbackBrowserId;
-}
 
 function getLocalLoginLock() {
   try {
@@ -127,15 +107,15 @@ function formatSecureLoginError(body) {
     persistLocalLoginLock(body.lockedUntil);
     const until = body.lockedUntil && Number.isFinite(Date.parse(body.lockedUntil))
       ? new Date(body.lockedUntil).toLocaleString() : null;
-    return until ? `Too many failed attempts. This browser is blocked until ${until}.`
-      : 'Too many failed attempts. This browser is blocked for 24 hours.';
+    return until ? `Too many failed attempts. Sign-in for this account and network is blocked until ${until}.`
+      : 'Too many failed attempts. Sign-in for this account and network is blocked for 24 hours.';
   }
   if (body?.code === 'INVALID_CREDENTIALS') {
     const remaining = Number(body.attemptsRemaining);
     if (Number.isFinite(remaining) && remaining > 0) {
-      return `Invalid email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before this browser is locked for 24 hours.`;
+      return `Invalid email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before sign-in for this account and network is locked for 24 hours.`;
     }
-    return 'Invalid email or password. This browser has been locked for 24 hours.';
+    return 'Invalid email or password. Sign-in for this account and network is blocked for 24 hours.';
   }
   if (body?.code === 'ACCOUNT_NOT_ASSIGNED') {
     return 'Your credentials are valid, but this account has no active RepCount workspace. Contact the workspace administrator.';
@@ -667,13 +647,12 @@ const session = {
       const client = requireSupabase();
       const localLockUntil = getLocalLoginLock();
       if (localLockUntil) {
-        return { ok: false, error: { message: `Too many failed attempts. This browser is blocked until ${localLockUntil}.` } };
+        return { ok: false, error: { message: `Too many failed attempts. Sign-in for this account and network is blocked until ${localLockUntil}.` } };
       }
       const { data, error } = await client.functions.invoke('secure-login', {
         body: {
           email: String(email ?? '').trim().toLowerCase(),
           password: String(password ?? ''),
-          browserId: getLoginBrowserId(),
         },
       });
       if (error) {
@@ -708,6 +687,48 @@ const session = {
       return { ok: true, value: appUser };
     } catch (error) {
       return { ok: false, error: { message: error instanceof Error ? error.message : 'Secure sign-in is temporarily unavailable.' } };
+    }
+  },
+
+  async sendResetLink({ email }) {
+    try {
+      const client = requireSupabase();
+      const normalizedEmail = String(email ?? '').trim().toLowerCase();
+      if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        return { ok: false, error: { message: 'Enter a valid email address.' } };
+      }
+      // Supabase requires the exact production/reset redirect to be allowlisted
+      // in Authentication > URL Configuration. Never expose privileged keys.
+      const redirectTo = new URL('/reset-password', window.location.origin).toString();
+      const { error } = await client.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
+      if (error) return { ok: false, error: { message: 'Unable to send the reset email right now. Please try again later.' } };
+      // A generic success response avoids revealing which emails have accounts.
+      return { ok: true };
+    } catch {
+      return { ok: false, error: { message: 'Password recovery is temporarily unavailable. Please try again later.' } };
+    }
+  },
+
+  async resetPassword({ newPassword }) {
+    try {
+      const client = requireSupabase();
+      if (typeof newPassword !== 'string' || newPassword.length < 12) {
+        return { ok: false, error: { message: 'Use a password with at least 12 characters.' } };
+      }
+      // A recovery link establishes a temporary Supabase Auth session via PKCE.
+      // Without a valid session, updateUser cannot change any password.
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        return { ok: false, error: { message: 'Your password reset link is missing or expired. Request a new one.' } };
+      }
+      const { error } = await client.auth.updateUser({ password: newPassword });
+      if (error) return { ok: false, error: { message: error.message || 'Password reset failed.' } };
+      await client.auth.signOut();
+      cachedAppUser = null;
+      cachedAuthUserId = null;
+      return { ok: true };
+    } catch {
+      return { ok: false, error: { message: 'Password reset failed. Request a new reset link and try again.' } };
     }
   },
 
