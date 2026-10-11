@@ -52,6 +52,8 @@ function buildDiscoveredRoute(r) {
 
 // Keep one public sign-in screen. New accounts are provisioned by an active Admin.
 const AuthPage = lazy(() => import('@/pages/auth/AuthPage'));
+const AuthForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
+const AuthResetPassword = lazy(() => import('@/pages/auth/ResetPassword'));
 const AuthAccessDenied = lazy(() => import('@/pages/auth/AccessDenied'));
 
 function buildAuthRoutes() {
@@ -60,6 +62,8 @@ function buildAuthRoutes() {
   );
   return [
     { path: 'login', element: loginEl, handle: { access: 'public' } },
+    { path: 'forgot-password', element: authWrap(AuthForgotPassword), handle: { access: 'public' } },
+    { path: 'reset-password', element: authWrap(AuthResetPassword), handle: { access: 'public' } },
     { path: 'access-denied', element: authWrap(AuthAccessDenied), handle: { access: 'public' } },
   ];
 }
