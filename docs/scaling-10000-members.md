@@ -22,7 +22,7 @@ Migration `20261011120000_indexed_bounded_directory_api.sql` plus `2026101112150
 - **Browser demo:** caches its seeded data in memory instead of repeatedly JSON-parsing localStorage; indexes ledger member lookups with a Map for performant demonstrations. Demo still uses browser-local fictional data, **not a 10k-user shared production database**.
 
 ## Verification
-1. A synthetic 10,000-member insert within a **single BEGIN ... ROLLBACK** transaction was run under the actual Admin's `authenticated` role on Supabase project `mnflpbdtfvksbxjdsvdf`.
+1. A synthetic 10,000-member insert within a **single BEGIN ... ROLLBACK** transaction was run under an authenticated test Admin's `authenticated` role on Supabase project `<gym-specific Supabase project ref>`.
 2. Database checks passed: page 1 contains 25 of 10,000, page 400 contains 25 of 10,000, exact literal search for member 09999 works, soon-filter pages are limited to 25, and ledger pages return at most 25.
 3. Rollback confirmed that **zero** synthetic members remained in the database.
 4. A second rolled-back Supabase transaction inserted 10,000 fictional payment receipts linked to 10,000 fictional members. The payments endpoint returned 25 receipts from the first and 400th pages, and a literal receipt-name search near record 9,999 found the expected payment. After rollback, zero test members and zero test payments remained.
