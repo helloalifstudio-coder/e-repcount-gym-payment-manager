@@ -73,26 +73,6 @@ function requireSupabase() {
   return supabase;
 }
 
-const LOGIN_LOCK_UNTIL_KEY = 'repcount.login-lock-until.v1';
-
-function getLocalLoginLock() {
-  try {
-    const raw = window.localStorage.getItem(LOGIN_LOCK_UNTIL_KEY);
-    const until = raw ? Date.parse(raw) : NaN;
-    if (Number.isFinite(until) && until > Date.now()) return new Date(until).toLocaleString();
-    window.localStorage.removeItem(LOGIN_LOCK_UNTIL_KEY);
-  } catch { /* server lock remains authoritative */ }
-  return null;
-}
-
-function persistLocalLoginLock(lockedUntil) {
-  try {
-    if (lockedUntil && Number.isFinite(Date.parse(lockedUntil))) {
-      window.localStorage.setItem(LOGIN_LOCK_UNTIL_KEY, lockedUntil);
-    }
-  } catch { /* ignore storage restrictions */ }
-}
-
 async function readSecureLoginError(error) {
   try {
     const response = error?.context;
@@ -104,7 +84,6 @@ async function readSecureLoginError(error) {
 
 function formatSecureLoginError(body) {
   if (body?.code === 'LOGIN_LOCKED') {
-    persistLocalLoginLock(body.lockedUntil);
     const until = body.lockedUntil && Number.isFinite(Date.parse(body.lockedUntil))
       ? new Date(body.lockedUntil).toLocaleString() : null;
     return until ? `Too many failed attempts. Sign-in for this account and network is blocked until ${until}.`
@@ -645,10 +624,6 @@ const session = {
   async login({ email, password }) {
     try {
       const client = requireSupabase();
-      const localLockUntil = getLocalLoginLock();
-      if (localLockUntil) {
-        return { ok: false, error: { message: `Too many failed attempts. Sign-in for this account and network is blocked until ${localLockUntil}.` } };
-      }
       const { data, error } = await client.functions.invoke('secure-login', {
         body: {
           email: String(email ?? '').trim().toLowerCase(),
@@ -681,7 +656,6 @@ const session = {
         cachedAuthUserId = null;
         return { ok: false, error: { message: 'Your account has no active RepCount workspace. Contact the workspace administrator.' } };
       }
-      try { window.localStorage.removeItem(LOGIN_LOCK_UNTIL_KEY); } catch { /* ignore */ }
       cachedAppUser = appUser;
       cachedAuthUserId = verifiedData.user.id;
       return { ok: true, value: appUser };
