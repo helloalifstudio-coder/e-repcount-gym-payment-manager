@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { createDemoSdk } from './demoSdk.js';
+
+export const isDemoMode = import.meta.env.VITE_REPCOUNT_DEMO_MODE === 'true';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -15,7 +18,7 @@ export let supabase = null;
 
 // A bad Vercel environment value must not throw during module import: if it does,
 // React never mounts and the static HTML loader remains on screen indefinitely.
-if (isSupabaseConfigured) {
+if (isSupabaseConfigured && !isDemoMode) {
   try {
     supabase = createClient(supabaseUrl, publishableKey, {
       auth: {
@@ -737,7 +740,7 @@ const teams = {
   },
 };
 
-export const sdk = {
+const liveSdk = {
   session,
   teams,
   isConfigured: isSupabaseConfigured,
@@ -827,3 +830,6 @@ export const sdk = {
     toUpdateFormat(value) { return value ?? []; },
   },
 };
+
+// A demo build never reads, authenticates against or mutates the production Supabase project.
+export const sdk = isDemoMode ? createDemoSdk() : liveSdk;
