@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import AlifGrowthFooter from '@/components/AlifGrowthFooter';
+import { sdk } from '@/services/sdk';
 
 const primaryLinks = [
   { label: 'Home', to: '/', icon: 'LayoutDashboard' },
@@ -100,6 +101,11 @@ export default function OwnerLayout() {
           </div>
         </div>
       </header>
+      {sdk.isDemo && (
+        <div className="border-b border-primary/25 bg-primary/10 px-4 py-2 text-center text-xs font-semibold text-foreground" role="status">
+          DEMO MODE · All records are fictional and changes stay in this browser. No Supabase data is accessed.
+        </div>
+      )}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 md:px-8 md:py-8">
         <ErrorBoundary><Outlet /></ErrorBoundary>
       </main>
