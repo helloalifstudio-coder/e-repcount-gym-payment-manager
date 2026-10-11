@@ -56,7 +56,7 @@ export default function Dues(){
  const rows = data?.rows ?? [];
  return <div className="space-y-6">
    <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-     <div className="min-w-0"><h1 className="text-2xl font-heading font-semibold tracking-tight">Dues</h1><p className="mt-1 text-sm text-muted-foreground">Check who needs to pay, review a due, or send a reminder.</p></div>
+     <div className="min-w-0"><h1 className="text-2xl font-heading font-semibold tracking-tight">Unpaid fee exceptions</h1><p className="mt-1 text-sm text-muted-foreground">Only for members allowed to pay later. Standard upfront-paid memberships and expiry reminders are managed under Renewals.</p></div>
      <Button asChild className="min-h-11 shrink-0 active:scale-[0.98]"><Link to="/payments/new"><ApperIcon name="Plus" size={16} className="mr-2"/>Record payment</Link></Button>
    </header>
    <div className="space-y-3">
