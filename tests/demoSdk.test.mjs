@@ -26,7 +26,9 @@ test('sample plans, members, linked dues and dashboard summary load without Supa
   assert.equal(dues.total,4);
   assert.equal(dues.data[0].member_c.Name,'Arjun Sharma');
   assert.equal(dues.data[0].plan_c.Name,'Quarterly Strength');
-  const summary=await sdk.dashboardSummary(new Date().toLocaleDateString('en-CA'));
+  const now = new Date();
+  const today = [now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+  const summary=await sdk.dashboardSummary(today);
   assert.equal(summary.outstanding,6797);
   assert.equal(summary.collectedToday,1799);
 });
