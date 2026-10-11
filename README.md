@@ -1,6 +1,6 @@
 # RepCount — Gym Payment Manager
 
-RepCount is a mobile-first gym-owner workspace for membership plans, member records, fee cycles, payment receipts, renewals and collection follow-ups. The application is branded as **Powered by Alif Growth Media**.
+RepCount is a mobile-first **gym membership renewal tracker** for upfront membership fees, next billing dates, member reminders, receipt history and exceptional pay-later dues. The application is branded as **Powered by Alif Growth Media**.
 
 ## Backend migration status
 
@@ -171,3 +171,47 @@ The demo SDK does **not** initialize a Supabase client, call Edge Functions or a
 On Vercel, set `VITE_REPCOUNT_DEMO_MODE=true` for the intended demo environment and redeploy. This is a **build-time** Vite flag. Removing or changing the variable without redeploying will not change the already-published frontend. Do not mistake the demonstration for a secured production authentication service.
 
 For real production, unset demo mode or use `VITE_REPCOUNT_DEMO_MODE=false`, retain the Supabase publishable URL/key, and use per-user Supabase Auth with the tenant policies and database constraints.
+
+
+## Renewal-first product model (2026-10-11)
+
+**Main workflow: Member → Plan → Upfront payment → Next renewal date → Manual WhatsApp reminder → Paid renewal.**
+
+- Gym owners commonly collect the membership fee **before** the membership period. Therefore, a membership with an upcoming or expired renewal date is **not automatically an unpaid debt**.
+- `/renewals` lists expiring memberships, renewals due today, expired memberships and members with no scheduled renewal; `/` features this dashboard instead of outstanding fees.
+- A 1-, 3-, 6- or 12-month active plan determines the renewal period; month-end dates are clamped (e.g. January 31 + 1 month = February 28/29).
+- When payment arrives **before expiry**, the new paid period extends from the existing expiry. If paid **after expiry**, it starts on the payment date; the new renewal is stored on the member.
+- Admin/Manager can confirm the full plan fee and payment method from Renewals. Other staff can view renewal dates and prepare manual WhatsApp reminders.
+- WhatsApp actions open a **prefilled** message; the staff member must check and press Send. This project does not send background WhatsApp messages or claim automatic notification delivery.
+- New member enrollment supports an upfront payment; if a first-payment request fails after creation, the member record remains for recovery under Renewals, and the UI reports that the payment was not recorded.
+- Legacy `/dues` represents only exceptional agreements where the gym intentionally permits payment after service. It is not the default renewal workflow.
+
+### Supabase changes
+
+The additive migration `supabase/migrations/20261011110000_membership_renewals.sql` creates a scoped `membership_renewals` history ledger and `record_membership_renewal` RPC.
+
+The RPC uses **SECURITY INVOKER** and ordinary RLS; it requires an active gym Admin or Manager. Within one SQL transaction it records a full upfront payment, adjusts the member's plan / next renewal date and appends a history event. A caller-generated `request_id` gives idempotency on retries so a double-click or retry does not record a second payment.
+
+No existing fees or payment history are deleted or reclassified by the migration. Earlier fee-cycle screens remain for exceptional debts; a renewal payment is not a due-payment, and both types appear in general Payments history.
+
+The migration was applied to Supabase project `mnflpbdtfvksbxjdsvdf`; a transaction-only smoke test created a plan, member and paid renewal twice using one request ID, confirmed exactly one payment and a later renewal date, and rolled everything back (no test records remain).
+
+### Customer demo mode
+
+`VITE_REPCOUNT_DEMO_MODE=true` uses sample upfront-paid memberships and a local renewal history in browser storage. All demo records and simulated renewal payments remain isolated from real Supabase. Settings → Reset demo data restores the examples.
+
+`VITE_REPCOUNT_DEMO_MODE=false` uses Supabase Auth, RLS, the renewal RPC and the real payment tables. **Never deploy a real gym without completing credential, staff-role and production browser acceptance testing.**
+
+### Quick acceptance walk-through
+
+1. Sign in to the demo and open Renewals. Verify near-expiry, today's and expired memberships.
+2. Open WhatsApp reminder; check the prefilled member name, expiry date and plan fee. Sending is manual.
+3. Record a full renewal for a near-expiry member; confirm it advances from the original expiry and appears in Payments.
+4. Add a new member with an active plan and payment received; verify the next renewal is auto-calculated.
+5. Visit the Home dashboard and Members: active, soon and expired counts should reflect the new date.
+6. Verify old unpaid fee cycles remain available under Unpaid fee exceptions.
+7. Test browser refresh and Settings → Reset demo data.
+
+### Important limitations
+
+Automatic WhatsApp delivery and background schedules are not implemented. Historical statuses in `gym_members.status_c` are retained for compatibility; membership expiry displays are derived from the date, not the old stored status. The member-creation API and initial payment RPC are separate requests; a failed second step can leave an unactivated member, which staff should complete through Renewals.
