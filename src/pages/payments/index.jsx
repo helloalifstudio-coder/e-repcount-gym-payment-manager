@@ -33,12 +33,14 @@ const dateKey = date => {
   return `${year}-${month}-${day}`;
 };
 
-const { and, or, contains, eq, isIn } = window.RepCountSDK.CoreSDK;
+
 const STATUSES = ['All', 'Paid', 'Pending', 'Refunded'];
 
 export default function Payments() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
+  const [debouncedSearch,setDebouncedSearch]=useState('');
+  useEffect(()=>{const timer=setTimeout(()=>setDebouncedSearch(search.trim()),250);return ()=>clearTimeout(timer);},[search]);
   const [status, setStatus] = useState('All');
   const [period, setPeriod] = useState(() => searchParams.get('period') === 'today' ? 'today' : 'all');
   const [page, setPage] = useState(1);
@@ -48,32 +50,9 @@ export default function Payments() {
     setPage(1);
   }, [search, status, period]);
 
-  const { data, loading, error, run } = useFetch(async () => {
-    const filters = [];
-    if (search.trim()) {
-      const term = search.trim();
-      const matchingMembers = await sdk.table('gym_members_c')
-        .select(['Id'])
-        .where(or(contains('Name', term), contains('phone_c', term)))
-        .limit(1000, 0)
-        .fetch();
-      if (!matchingMembers.success) throw new Error(matchingMembers.message || 'Could not search members.');
-      const searchClauses = [contains('Name', term), contains('method_c', term)];
-      const memberIds = matchingMembers.data.map(member => member.Id);
-      if (memberIds.length) searchClauses.push(isIn('member_c', memberIds));
-      filters.push(or(...searchClauses));
-    }
-    if (status !== 'All') filters.push(eq('status_c', status));
-    if (period === 'today') filters.push(eq('paid_on_c', today));
-
-    let query = sdk.table('payments_c')
-      .select(['Id', 'Name', 'member_c', 'amount_c', 'paid_on_c', 'method_c', 'status_c']);
-    if (filters.length) query = query.where(and(...filters));
-
-    const result = await query.orderByDesc('paid_on_c').page(page, 25).fetch();
-    if (!result.success) throw new Error(result.message || 'Could not load payments.');
-    return { rows: result.data, total: result.total, hasMore: result.hasMore };
-  }, [search, status, period, page, today]);
+  const { data, loading, error, run } = useFetch(()=>
+    sdk.ledger.list({kind:'payments',search:debouncedSearch,status,period,page,pageSize:25}),
+    [debouncedSearch,status,period,page]);
 
   const rows = data?.rows ?? [];
   const paidPageTotal = rows
