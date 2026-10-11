@@ -32,6 +32,8 @@ RepCount tracks members, prepaid memberships, next billing dates, manual WhatsAp
 8. Vercel → **Add New → Project** → import this **owner's fork** as a Vite app. Under **Environment Variables → Production**, enter the values from `03_vercel_environment.txt`: your gym's **URL**, **publishable key** from Supabase Settings → API Keys, and `VITE_REPCOUNT_DEMO_MODE=false`. Deploy/redeploy.
 9. From your terminal, create `.env.local` based on `.env.example` and enter the same values; run `npm run setup:check` or `npm run setup:check -- --remote` to verify local configuration and optional endpoint reachability. Then sign in using the owner-created Auth account and test a new plan, member, upfront renewal and Staff role.
 
+**No local wizard?** The same optimized 11-migration SQL is also committed as [supabase/install.sql](supabase/install.sql), ready to paste into a **new empty** Supabase project. After creating the confirmed Auth user, open [supabase/bootstrap_admin.sql](supabase/bootstrap_admin.sql), replace its TWO placeholders (email and gym name), and run it once. The wizard is safer because it fills and SQL-escapes those details automatically.
+
 **That's it.** No editing SQL by hand; the setup wizard creates the customized Admin script and concatenates the real indexed production migrations for you. An Admin password is never hardcoded or stored in the repository.
 
 For screenshots, troubleshooting, aftercare and full safeguards: **[Gym setup guide](docs/GYM_SETUP.md)**.
