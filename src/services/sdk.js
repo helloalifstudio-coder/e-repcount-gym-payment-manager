@@ -73,27 +73,7 @@ function requireSupabase() {
   return supabase;
 }
 
-const LOGIN_BROWSER_ID_KEY = 'repcount.login-browser-id.v1';
 const LOGIN_LOCK_UNTIL_KEY = 'repcount.login-lock-until.v1';
-let fallbackBrowserId = null;
-
-function getLoginBrowserId() {
-  try {
-    const stored = window.localStorage.getItem(LOGIN_BROWSER_ID_KEY);
-    if (stored && /^[A-Za-z0-9_-]{24,100}$/.test(stored)) return stored;
-  } catch { /* server-side limits remain authoritative */ }
-  if (!fallbackBrowserId) {
-    const bytes = new Uint8Array(24);
-    if (globalThis.crypto?.getRandomValues) {
-      globalThis.crypto.getRandomValues(bytes);
-      fallbackBrowserId = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    } else {
-      fallbackBrowserId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-    }
-  }
-  try { window.localStorage.setItem(LOGIN_BROWSER_ID_KEY, fallbackBrowserId); } catch { /* continue */ }
-  return fallbackBrowserId;
-}
 
 function getLocalLoginLock() {
   try {
@@ -127,15 +107,15 @@ function formatSecureLoginError(body) {
     persistLocalLoginLock(body.lockedUntil);
     const until = body.lockedUntil && Number.isFinite(Date.parse(body.lockedUntil))
       ? new Date(body.lockedUntil).toLocaleString() : null;
-    return until ? `Too many failed attempts. This browser is blocked until ${until}.`
-      : 'Too many failed attempts. This browser is blocked for 24 hours.';
+    return until ? `Too many failed attempts. Sign-in for this account and network is blocked until ${until}.`
+      : 'Too many failed attempts. Sign-in for this account and network is blocked for 24 hours.';
   }
   if (body?.code === 'INVALID_CREDENTIALS') {
     const remaining = Number(body.attemptsRemaining);
     if (Number.isFinite(remaining) && remaining > 0) {
-      return `Invalid email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before this browser is locked for 24 hours.`;
+      return `Invalid email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before sign-in for this account and network is locked for 24 hours.`;
     }
-    return 'Invalid email or password. This browser has been locked for 24 hours.';
+    return 'Invalid email or password. Sign-in for this account and network is blocked for 24 hours.';
   }
   if (body?.code === 'ACCOUNT_NOT_ASSIGNED') {
     return 'Your credentials are valid, but this account has no active RepCount workspace. Contact the workspace administrator.';
@@ -667,13 +647,12 @@ const session = {
       const client = requireSupabase();
       const localLockUntil = getLocalLoginLock();
       if (localLockUntil) {
-        return { ok: false, error: { message: `Too many failed attempts. This browser is blocked until ${localLockUntil}.` } };
+        return { ok: false, error: { message: `Too many failed attempts. Sign-in for this account and network is blocked until ${localLockUntil}.` } };
       }
       const { data, error } = await client.functions.invoke('secure-login', {
         body: {
           email: String(email ?? '').trim().toLowerCase(),
           password: String(password ?? ''),
-          browserId: getLoginBrowserId(),
         },
       });
       if (error) {
