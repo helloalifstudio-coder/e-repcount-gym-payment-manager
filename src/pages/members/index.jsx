@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useFetch } from '@/hooks/useFetch';
 import { sdk } from '@/services/sdk';
+import { renewalStatus } from '@/services/renewalLogic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -31,14 +32,14 @@ export default function Members() {
   const { data, loading, error, run } = useFetch(async () => {
     const filters = [];
     if (search.trim()) filters.push(or(contains('Name', search.trim()), contains('phone_c', search.trim()), contains('email_c', search.trim())));
-    if (status !== 'All') filters.push(eq('status_c', status));
+    // Date-based renewal state is computed locally, not trusted from stale status_c.
     let query = sdk.table('gym_members_c').select(['Id', 'Name', 'phone_c', 'plan_c', 'due_date_c', 'status_c']);
     if (filters.length) query = query.where(and(...filters));
     const result = await query.orderBy('Name').page(page, 25).fetch();
     if (!result.success) throw new Error(result.message);
     return { rows: result.data, total: result.total, hasMore: result.hasMore };
   }, [search, status, page]);
-  const rows = data?.rows ?? [];
+  const rows = (data?.rows ?? []).filter(m=>status==='All'||({active:'Active',soon:'Due soon',today:'Due soon',expired:'Overdue',inactive:'Inactive','not-set':'Inactive'}[renewalStatus(m)]===status));
   return <div className="space-y-6">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div><h1 className="text-2xl font-heading font-semibold tracking-tight">Members</h1><p className="mt-1 text-sm text-muted-foreground">Find a member to review their details, membership and renewal status.</p></div>
@@ -51,7 +52,7 @@ export default function Members() {
     {loading ? <ListSkeleton rows={6} /> : error ? <div role="alert" className="rounded-lg border border-border p-4"><p className="text-sm">Could not load members. Please try again.</p><Button variant="outline" className="mt-3" onClick={run}>Try again</Button></div> : <section aria-label="Members" className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="divide-y divide-border">{rows.map(member => <Link key={member.Id} to={`/members/${member.Id}`} className="flex min-w-0 items-center gap-3 p-4 transition-colors duration-(--transition-fast) hover:bg-accent active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
         <Avatar className="h-10 w-10 shrink-0"><AvatarFallback>{(member.Name || 'Member').split(' ').map(part => part[0]).slice(0, 2).join('')}</AvatarFallback></Avatar>
-        <div className="min-w-0 flex-1"><p className="text-sm font-medium break-words">{member.Name}</p><p className="mt-1 text-sm text-muted-foreground break-words">{member.phone_c || 'No phone'} · {member.plan_c?.Name || 'No plan'}</p><p className="mt-1 text-xs text-muted-foreground">Renewal: {member.due_date_c ? formatLocalDate(member.due_date_c, DATE_FORMATS.SHORT) : 'Not set'}</p><Badge variant="outline" className={`mt-2 ${statusStyles[member.status_c] || statusStyles.Inactive}`}>{member.status_c || 'Inactive'}</Badge></div>
+        <div className="min-w-0 flex-1"><p className="text-sm font-medium break-words">{member.Name}</p><p className="mt-1 text-sm text-muted-foreground break-words">{member.phone_c || 'No phone'} · {member.plan_c?.Name || 'No plan'}</p><p className="mt-1 text-xs text-muted-foreground">Renewal: {member.due_date_c ? formatLocalDate(member.due_date_c, DATE_FORMATS.SHORT) : 'Not set'}</p><Badge variant="outline" className={`mt-2 ${statusStyles[({active:'Active',soon:'Due soon',today:'Due soon',expired:'Overdue',inactive:'Inactive','not-set':'Inactive'})[renewalStatus(member)]] || statusStyles.Inactive}`}>{({active:'Active',soon:'Due soon',today:'Due soon',expired:'Expired',inactive:'Inactive','not-set':'No renewal date'})[renewalStatus(member)]}</Badge></div>
         <ApperIcon name="ChevronRight" size={18} className="shrink-0 text-muted-foreground" />
       </Link>)}</div>
       {!rows.length && <div className="p-8 text-center"><p className="text-sm font-medium">No members found</p><p className="mt-1 text-sm text-muted-foreground">{canCreate ? 'Try a different search or add your first member.' : 'Try a different search or ask an administrator to add members.'}</p>{canCreate && <Button asChild className="mt-4" variant="outline"><Link to="/members/new">Add member</Link></Button>}</div>}
